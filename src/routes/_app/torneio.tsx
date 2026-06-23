@@ -456,59 +456,183 @@ function Torneio() {
     );
   }
 
-  // --- DISPUTA DE PÊNALTIS AO VIVO ---
+  // --- DISPUTA DE PÊNALTIS AO VIVO (Noir Stadium) ---
   if (penaltisAoVivo) {
     const { casa, fora, cobrancas, indiceAtual } = penaltisAoVivo;
     const cobrancasFeitas = cobrancas.slice(0, indiceAtual);
     const cobrancaAtual = cobrancas[indiceAtual] ?? null;
     const placarCasa = cobrancasFeitas.filter(c => c.time === "casa" && c.acertou).length;
     const placarFora = cobrancasFeitas.filter(c => c.time === "fora" && c.acertou).length;
+    const proximoBatedor = cobrancaAtual;
+    const acabou = indiceAtual >= cobrancas.length;
+    // Marcadores: 5 slots por time (sudden death pode passar de 5, exibe extras à direita)
+    const slotsCasa = Math.max(5, cobrancas.filter(c => c.time === "casa").length);
+    const slotsFora = Math.max(5, cobrancas.filter(c => c.time === "fora").length);
+    const indicadores = (lado: "casa" | "fora", slots: number) => {
+      const meus = cobrancas.filter(c => c.time === lado);
+      return Array.from({ length: slots }, (_, i) => {
+        const cob = meus[i];
+        const feita = cob && cobrancasFeitas.includes(cob);
+        if (!feita) return "pendente";
+        return cob!.acertou ? "gol" : "miss";
+      });
+    };
+    const indCasa = indicadores("casa", slotsCasa);
+    const indFora = indicadores("fora", slotsFora);
+    const nomeCasa = casa.isCPU ? casa.nome : (casa.nome || "Meu Time");
+    const nomeFora = fora.isCPU ? fora.nome : (fora.nome || "Meu Time");
+    const flagCasa = casa.isCPU ? casa.bandeira : (casa.bandeira || "🏆");
+    const flagFora = fora.isCPU ? fora.bandeira : (fora.bandeira || "🏆");
+    const sufixoFase = (faseAtiva ?? s.fase ?? "").toUpperCase();
     return (
-      <div className="mx-auto max-w-md px-4 py-6 space-y-4">
-        <div className="rounded-2xl border border-border bg-card p-4">
-          <div className="text-[10px] uppercase tracking-widest text-destructive text-center mb-2">Disputa de Pênaltis</div>
-          <div className="flex items-center justify-around">
-            <div className="text-center flex-1">
-              <div className="text-2xl mb-1">{casa.isCPU ? casa.bandeira : "🏆"}</div>
-              <div className="font-display text-xs uppercase truncate">{casa.nome}</div>
-              <div className="mt-1 flex items-center justify-center gap-1 text-[9px] uppercase tracking-widest text-muted-foreground">
-                <span className="size-2 rounded-full bg-blue-500" /> Azul
+      <div className="min-h-[100svh] bg-pen-dark text-foreground font-pen-mono flex flex-col -mx-4 -my-6 md:-mx-0">
+        {/* Top nav / fase */}
+        <nav className="px-6 py-4 flex justify-between items-center border-b border-white/10">
+          <span className="text-[10px] tracking-[0.2em] uppercase text-foreground/40">
+            {sufixoFase ? `${sufixoFase} — Pênaltis` : "Disputa de Pênaltis"}
+          </span>
+          <div className="flex items-center gap-2">
+            <div className="size-1.5 rounded-full bg-destructive animate-pulse" />
+            <span className="text-[10px] font-bold uppercase tracking-widest">Ao Vivo</span>
+          </div>
+        </nav>
+
+        {/* Scoreboard */}
+        <header className="p-6 space-y-6">
+          <div className="flex justify-between items-end gap-2">
+            <div className="flex flex-col items-start gap-1 min-w-0">
+              <span className="text-4xl">{flagCasa}</span>
+              <h2 className="font-pen-display text-2xl tracking-wide truncate max-w-[10ch]">{nomeCasa}</h2>
+              <div className="flex gap-1.5">
+                {indCasa.map((st, i) => (
+                  <div
+                    key={i}
+                    className={cn(
+                      "size-3 rounded-sm border",
+                      st === "gol" && "bg-pen-goal border-pen-goal",
+                      st === "miss" && "bg-pen-miss border-pen-miss",
+                      st === "pendente" && "bg-white/5 border-white/15",
+                    )}
+                  />
+                ))}
               </div>
             </div>
-            <div className="font-display text-5xl font-black tabular-nums">{placarCasa}–{placarFora}</div>
-            <div className="text-center flex-1">
-              <div className="text-2xl mb-1">{fora.isCPU ? fora.bandeira : "🏆"}</div>
-              <div className="font-display text-xs uppercase truncate">{fora.nome}</div>
-              <div className="mt-1 flex items-center justify-center gap-1 text-[9px] uppercase tracking-widest text-muted-foreground">
-                <span className="size-2 rounded-full bg-red-500" /> Vermelho
+
+            <div className="flex flex-col items-center shrink-0">
+              <div className="text-5xl font-pen-display leading-none tracking-tighter tabular-nums">
+                {placarCasa} <span className="text-white/20">x</span> {placarFora}
+              </div>
+              <span className="text-[10px] uppercase text-foreground/40 mt-2">Placar Atual</span>
+            </div>
+
+            <div className="flex flex-col items-end gap-1 min-w-0">
+              <span className="text-4xl">{flagFora}</span>
+              <h2 className="font-pen-display text-2xl tracking-wide truncate max-w-[10ch]">{nomeFora}</h2>
+              <div className="flex gap-1.5">
+                {indFora.map((st, i) => (
+                  <div
+                    key={i}
+                    className={cn(
+                      "size-3 rounded-sm border",
+                      st === "gol" && "bg-pen-goal border-pen-goal",
+                      st === "miss" && "bg-pen-miss border-pen-miss",
+                      st === "pendente" && "bg-white/5 border-white/15",
+                    )}
+                  />
+                ))}
               </div>
             </div>
           </div>
-          {cobrancaAtual && (
-            <p className="mt-3 text-center text-xs text-muted-foreground">
-              <span className="font-bold text-foreground">{cobrancaAtual.jogador}</span> bate pelo time {cobrancaAtual.time === "casa" ? casa.nome : fora.nome}...
-            </p>
+        </header>
+
+        {/* Stadium view (gol + bola) */}
+        <main className="relative flex-1 flex flex-col justify-center items-center px-6 overflow-hidden">
+          <div className="absolute inset-0 pointer-events-none"
+               style={{ background: "radial-gradient(ellipse at 50% 60%, var(--pen-light) 0%, transparent 60%)" }} />
+
+          <div className="relative w-full max-w-sm aspect-[4/5] flex flex-col">
+            {/* Trave */}
+            <div className="relative w-full h-48 border-x-4 border-t-4 border-white/80 rounded-t-sm shadow-[0_-20px_60px_-10px_rgba(255,255,255,0.1)]">
+              <div className="absolute inset-0"
+                   style={{ background: "radial-gradient(circle at 50% 0%, rgba(255,255,255,0.05) 0%, transparent 70%)" }} />
+              {/* Goleiro */}
+              <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-8 h-20 bg-white/10 blur-xl" />
+              {/* Indicador de gol/erro do último chute */}
+              {cobrancasFeitas.length > 0 && (
+                <div
+                  key={cobrancasFeitas.length}
+                  className={cn(
+                    "absolute font-pen-display text-3xl uppercase tracking-widest animate-pen-enter",
+                    "top-2 left-1/2 -translate-x-1/2",
+                    cobrancasFeitas[cobrancasFeitas.length - 1]!.acertou ? "text-pen-goal" : "text-pen-miss",
+                  )}
+                >
+                  {cobrancasFeitas[cobrancasFeitas.length - 1]!.acertou ? "GOL!" : "PERDEU"}
+                </div>
+              )}
+            </div>
+
+            {/* Gramado + marca do pênalti */}
+            <div className="flex-1 relative" style={{ background: "linear-gradient(to bottom, rgba(255,255,255,0.05), transparent)" }}>
+              <div className="absolute top-0 left-0 w-full h-px bg-white/10" />
+              <div className="absolute top-32 left-1/2 -translate-x-1/2">
+                <div className="size-4 rounded-full bg-white/20 animate-pen-focus" />
+                <div className="absolute -top-1 -left-1 size-6 bg-foreground rounded-full shadow-[0_0_15px_rgba(255,255,255,0.5)] ring-4 ring-black/20" />
+              </div>
+            </div>
+          </div>
+
+          {/* Próximo batedor */}
+          {proximoBatedor && !acabou && (
+            <div key={indiceAtual} className="absolute bottom-8 left-0 w-full px-8 text-center animate-pen-enter">
+              <p className="text-[10px] uppercase tracking-[0.3em] text-foreground/50 mb-1">Próximo Batedor</p>
+              <h3 className="font-pen-display text-4xl tracking-wider">{proximoBatedor.jogador}</h3>
+              <div className="mt-2 inline-flex items-center gap-2 px-3 py-1 bg-white/5 border border-white/10 rounded-full">
+                <span className="text-[10px] font-bold text-pen-goal">
+                  {proximoBatedor.time === "casa" ? nomeCasa.toUpperCase() : nomeFora.toUpperCase()}
+                </span>
+              </div>
+            </div>
           )}
-        </div>
+        </main>
 
-        <CampoAoVivo casa={casa} fora={fora} eventoAtual={null} modo="penaltis" cobrancaAtual={cobrancaAtual} velocidade={velocidade} />
+        {/* Footer: bater pênalti + histórico */}
+        <footer className="p-6 pt-0 space-y-4">
+          <button
+            type="button"
+            onClick={() => {
+              if (acabou) return;
+              setPenaltisAoVivo(p => p ? { ...p, indiceAtual: p.indiceAtual + 1 } : p);
+            }}
+            disabled={acabou}
+            className={cn(
+              "w-full group relative overflow-hidden bg-foreground text-pen-dark font-pen-display text-2xl py-5 tracking-widest uppercase transition-all",
+              !acabou && "hover:bg-pen-goal hover:text-foreground",
+              acabou && "opacity-50 cursor-not-allowed",
+            )}
+          >
+            <span className="relative z-10">{acabou ? "Disputa finalizada" : "Bater pênalti"}</span>
+          </button>
 
-        {/* marcadores de cada cobrança já realizada, estilo placar de TV */}
-        <div className="grid grid-cols-2 gap-3">
-          <div className="flex justify-center gap-1">
-            {cobrancasFeitas.filter(c => c.time === "casa").map((c, i) => (
-              <span key={i} className={cn("size-3 rounded-full", c.acertou ? "bg-primary" : "bg-destructive/60")} />
-            ))}
+          <div className="grid grid-cols-4 gap-2">
+            {cobrancasFeitas.slice(-8).map((c, i) => {
+              const label = c.time === "casa" ? `${c.rodada}º (${(nomeCasa[0] ?? "?")}${nomeCasa[1] ?? ""})` : `${c.rodada}º (${(nomeFora[0] ?? "?")}${nomeFora[1] ?? ""})`;
+              return (
+                <div key={i} className="bg-white/5 p-2 rounded flex flex-col gap-1 border border-white/5">
+                  <span className="text-[8px] text-foreground/40 uppercase">{label}</span>
+                  <span className="text-[10px] font-bold truncate">{c.jogador}</span>
+                  <span className={cn("text-[8px]", c.acertou ? "text-pen-goal" : "text-pen-miss")}>
+                    {c.acertou ? "GOL" : "ERRO"}
+                  </span>
+                </div>
+              );
+            })}
           </div>
-          <div className="flex justify-center gap-1">
-            {cobrancasFeitas.filter(c => c.time === "fora").map((c, i) => (
-              <span key={i} className={cn("size-3 rounded-full", c.acertou ? "bg-primary" : "bg-destructive/60")} />
-            ))}
-          </div>
-        </div>
+        </footer>
       </div>
     );
   }
+
 
   // --- RESUMO PÓS-PARTIDA (cards dos dois times lado a lado) ---
   if (resumoPosJogo) {
