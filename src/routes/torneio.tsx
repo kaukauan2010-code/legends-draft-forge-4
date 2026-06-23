@@ -53,6 +53,26 @@ function Torneio() {
   useEffect(() => {
     if (s.mostrarChaveamento) setEtapaMata("preview");
   }, [s.mostrarChaveamento]);
+
+  // Modo automático: avança automaticamente pelo fluxo de mata-mata
+  // preview (2s) → chaveamento (2s) → iniciar partida
+  useEffect(() => {
+    if (!s.modoAutomatico || !s.mostrarChaveamento) return;
+    // Vai de preview para chaveamento após 2s
+    if (etapaMata === "preview") {
+      const t = setTimeout(() => setEtapaMata("chave"), 2000);
+      return () => clearTimeout(t);
+    }
+    // Do chaveamento, inicia a partida após 2.5s
+    if (etapaMata === "chave") {
+      const t = setTimeout(() => {
+        s.confirmarChaveamento();
+        setTimeout(() => jogarPartida(), 100);
+      }, 2500);
+      return () => clearTimeout(t);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [s.modoAutomatico, s.mostrarChaveamento, etapaMata]);
   const [salvou, setSalvou] = useState(false);
   const intervaloRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const autoTimeoutRef = useRef<ReturnType<typeof setTimeout> | ReturnType<typeof setInterval> | null>(null);
@@ -216,9 +236,17 @@ function Torneio() {
           setPartidaAtiva(null);
           const estado = useCampanha.getState();
           if (estado.modoAutomatico && estado.fase !== "campeao" && estado.fase !== "eliminado") {
-            // Em automático, fecha o resumo sozinho depois e arranca a próxima.
-            if (estado.mostrarApresentacaoGrupos || estado.mostrarChaveamento) return;
-            setTimeout(() => { setResumoPosJogo(null); iniciarContagemAuto(); }, 3500);
+            // Em automático, fecha o resumo sozinho depois.
+            // Se há chaveamento pendente, o resumo fecha e o chaveamento abre em seguida.
+            // Aguarda 3.5s para o jogador ver o resultado antes de avançar.
+            setTimeout(() => {
+              setResumoPosJogo(null);
+              const estadoPos2 = useCampanha.getState();
+              if (!estadoPos2.mostrarChaveamento && !estadoPos2.mostrarApresentacaoGrupos) {
+                iniciarContagemAuto();
+              }
+              // Se há chaveamento, o useEffect de auto-avance do mata-mata cuidará disso
+            }, 3500);
           }
         }, 1500);
       }
@@ -262,7 +290,13 @@ function Torneio() {
   // confirmada, retoma o ciclo automaticamente.
   const avancarAutomatico = () => {
     if (s.modoAutomatico) {
-      autoTimeoutRef.current = setTimeout(() => jogarPartida(), 600);
+      // No mata-mata, avança automaticamente pelo fluxo: preview → chave → partida
+      if (s.mostrarChaveamento) {
+        // Já vai ser chamado depois que confirmarChaveamento() liberar o estado
+        autoTimeoutRef.current = setTimeout(() => jogarPartida(), 800);
+      } else {
+        autoTimeoutRef.current = setTimeout(() => jogarPartida(), 600);
+      }
     }
   };
 
@@ -456,7 +490,6 @@ function Torneio() {
           <Button
             onClick={() => {
               s.confirmarChaveamento();
-              // Inicia a próxima partida imediatamente (sem passar pela tela do lobby).
               setTimeout(() => jogarPartida(), 0);
             }}
             className="h-12 font-display uppercase tracking-widest font-black"

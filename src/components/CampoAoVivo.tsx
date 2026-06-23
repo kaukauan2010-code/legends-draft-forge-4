@@ -34,16 +34,16 @@ interface PosicaoBolinha {
 // teletransporte aleatório. Em "ultra" o ritmo é mais rápido pra acompanhar
 // a simulação acelerada dos 90 minutos.
 const INTERVALO_MOVIMENTO_MS: Record<Velocidade, number> = {
-  normal: 850,
-  rapida: 500,
-  ultra: 220,
+  normal: 1200,
+  rapida: 700,
+  ultra: 300,
 };
 // Quão forte cada jogador é atraído pela bola (0 = ignora, 1 = vai direto).
 // Valores moderados pra acompanhar a bola sem desfazer a formação.
 const ATRACAO_BOLA: Record<Velocidade, number> = {
-  normal: 0.22,
-  rapida: 0.32,
-  ultra: 0.5,
+  normal: 0.18,
+  rapida: 0.26,
+  ultra: 0.4,
 };
 
 
@@ -155,60 +155,84 @@ export function CampoAoVivo({ casa, fora, eventoAtual, cobrancaAtual, modo = "pa
     if (modo !== "partida") return;
     if (microRef.current) clearInterval(microRef.current);
     // intervalo entre micro-jogadas escala com a velocidade
-    const intervalo = velocidade === "ultra" ? 600 : velocidade === "rapida" ? 1200 : 2000;
+    const intervalo = velocidade === "ultra" ? 800 : velocidade === "rapida" ? 1500 : 2500;
     microRef.current = setInterval(() => {
       // se um evento "grande" (gol/chance) acabou de tocar, deixa ele
       // terminar antes de sobrescrever a bola.
-      if (Date.now() - ultimoEventoRef.current < 1600) return;
+      if (Date.now() - ultimoEventoRef.current < 2000) return;
       const posseAtual = posseRef.current ?? (Math.random() < 0.5 ? "casa" : "fora");
       posseRef.current = posseAtual;
       const atacaCasa = posseAtual === "casa";
       const meuTime = atacaCasa ? posCasa : posFora;
+      const timeDef = atacaCasa ? posFora : posCasa;
       if (!meuTime.length) return;
       const tipoSorte = Math.random();
-      // ~55% passe entre dois companheiros, 15% cruzamento, 10% chute pra fora,
-      // 10% escanteio, 10% lateral.
-      if (tipoSorte < 0.55) {
-        // passe: bola vai do jogador A ao jogador B do mesmo time
+      // ~45% passe curto, 15% passe longo, 12% cruzamento, 8% chute,
+      // 8% escanteio, 7% lateral, 5% troca de posse
+      if (tipoSorte < 0.45) {
+        // passe curto entre dois companheiros próximos
         const a = meuTime[Math.floor(Math.random() * meuTime.length)]!;
-        const b = meuTime[Math.floor(Math.random() * meuTime.length)]!;
+        // escolhe um companheiro próximo (distância menor)
+        const proximos = meuTime.filter(p => p.id !== a.id && Math.abs(p.y - a.y) < 20);
+        const b = proximos.length ? proximos[Math.floor(Math.random() * proximos.length)]! : meuTime[Math.floor(Math.random() * meuTime.length)]!;
         setBola({ x: a.x, y: a.y });
-        const t = setTimeout(() => setBola({ x: b.x, y: b.y }), 250);
+        const t = setTimeout(() => setBola({ x: b.x + (Math.random() - 0.5) * 3, y: b.y + (Math.random() - 0.5) * 3 }), 350);
         animRef.current.push(t);
-      } else if (tipoSorte < 0.70) {
+      } else if (tipoSorte < 0.60) {
+        // passe longo para a frente
+        const origem = meuTime.filter(p => atacaCasa ? p.y > 30 : p.y < 70);
+        const destino = meuTime.filter(p => atacaCasa ? p.y < 35 : p.y > 65);
+        const a = (origem.length ? origem : meuTime)[Math.floor(Math.random() * (origem.length || meuTime.length))]!;
+        const b = (destino.length ? destino : meuTime)[Math.floor(Math.random() * (destino.length || meuTime.length))]!;
+        setBola({ x: a.x, y: a.y });
+        const t = setTimeout(() => setBola({ x: b.x + (Math.random() - 0.5) * 5, y: b.y }), 500);
+        animRef.current.push(t);
+      } else if (tipoSorte < 0.72) {
         // cruzamento: ponta lateral pra área adversária
         const lado = Math.random() < 0.5 ? 8 : 92;
-        const yLateral = atacaCasa ? 18 : 82;
+        const yLateral = atacaCasa ? 20 : 80;
         const yArea = atacaCasa ? 10 : 90;
         setBola({ x: lado, y: yLateral });
-        const t = setTimeout(() => setBola({ x: 45 + Math.random() * 10, y: yArea }), 350);
+        const t = setTimeout(() => setBola({ x: 40 + Math.random() * 20, y: yArea }), 450);
         animRef.current.push(t);
       } else if (tipoSorte < 0.80) {
-        // chute pra fora: vai pro gol mas sai
-        const xFora = Math.random() < 0.5 ? 20 : 80;
-        const yGol = atacaCasa ? 2 : 98;
-        const meio = meuTime.find(p => p.y > 15 && p.y < 45) ?? meuTime[0]!;
-        setBola({ x: meio.x, y: meio.y });
-        const t = setTimeout(() => setBola({ x: xFora, y: yGol }), 300);
+        // chute a gol (defesa salva ou sai)
+        const atacantes = meuTime.filter(p => atacaCasa ? p.y < 25 : p.y > 75);
+        const bat = atacantes.length ? atacantes[Math.floor(Math.random() * atacantes.length)]! : meuTime[0]!;
+        const yGol = atacaCasa ? 4 : 96;
+        setBola({ x: bat.x, y: bat.y });
+        const t = setTimeout(() => setBola({ x: 42 + Math.random() * 16, y: yGol }), 400);
         animRef.current.push(t);
-        const t2 = setTimeout(() => setBola({ x: 50, y: 50 }), 1400);
+        const t2 = setTimeout(() => {
+          // goleiro "defende": bola vai para canto ou área
+          setBola({ x: 20 + Math.random() * 60, y: atacaCasa ? 12 : 88 });
+        }, 900);
         animRef.current.push(t2);
-      } else if (tipoSorte < 0.90) {
-        // escanteio: bola vai pro canto da linha de fundo
+        const t3 = setTimeout(() => setBola({ x: 50, y: 50 }), 1800);
+        animRef.current.push(t3);
+      } else if (tipoSorte < 0.88) {
+        // escanteio: bola vai pro canto → cabeceio na área
         const lado = Math.random() < 0.5 ? 3 : 97;
         const yLinha = atacaCasa ? 3 : 97;
         setBola({ x: lado, y: yLinha });
-        const t = setTimeout(() => setBola({ x: 50, y: atacaCasa ? 12 : 88 }), 450);
+        const t = setTimeout(() => setBola({ x: 45 + Math.random() * 10, y: atacaCasa ? 12 : 88 }), 600);
         animRef.current.push(t);
-      } else {
-        // lateral: bola vai pra linha lateral perto da metade do campo
+        const t2 = setTimeout(() => setBola({ x: 50, y: 50 }), 1500);
+        animRef.current.push(t2);
+      } else if (tipoSorte < 0.95) {
+        // lateral: bola vai pra linha e volta para campo
         const lado = Math.random() < 0.5 ? 2 : 98;
-        setBola({ x: lado, y: 30 + Math.random() * 40 });
+        setBola({ x: lado, y: 25 + Math.random() * 50 });
         const t = setTimeout(() => {
           const dest = meuTime[Math.floor(Math.random() * meuTime.length)]!;
           setBola({ x: dest.x, y: dest.y });
-        }, 350);
+        }, 450);
         animRef.current.push(t);
+      } else {
+        // troca de posse: adversário rouba a bola
+        posseRef.current = atacaCasa ? "fora" : "casa";
+        const roubador = timeDef[Math.floor(Math.random() * timeDef.length)];
+        if (roubador) setBola({ x: roubador.x, y: roubador.y });
       }
     }, intervalo);
     return () => { if (microRef.current) clearInterval(microRef.current); };
@@ -294,7 +318,7 @@ export function CampoAoVivo({ casa, fora, eventoAtual, cobrancaAtual, modo = "pa
   }, [cobrancaAtual?.rodada, cobrancaAtual?.time, modo]);
 
   return (
-    <div className="relative aspect-[5/6] w-full max-w-[260px] mx-auto overflow-hidden rounded-xl border-2 border-white/10 shadow-inner"
+    <div className="relative aspect-[5/6] w-full max-w-[220px] mx-auto overflow-hidden rounded-xl border-2 border-white/10 shadow-inner"
          style={{ background: "linear-gradient(to bottom, var(--color-pitch) 0%, var(--color-pitch-dark) 50%, var(--color-pitch) 100%)" }}>
       {/* linhas */}
       <div className="pointer-events-none absolute inset-2 rounded border border-white/25" />
@@ -340,10 +364,16 @@ export function CampoAoVivo({ casa, fora, eventoAtual, cobrancaAtual, modo = "pa
 
       {/* bola */}
       <div
-        className="absolute -translate-x-1/2 -translate-y-1/2 transition-all duration-300 ease-out z-20"
-        style={{ left: `${bola.x}%`, top: `${bola.y}%` }}
+        className="absolute -translate-x-1/2 -translate-y-1/2 z-20"
+        style={{
+          left: `${bola.x}%`,
+          top: `${bola.y}%`,
+          transitionProperty: "left, top",
+          transitionDuration: "400ms",
+          transitionTimingFunction: "cubic-bezier(0.25, 0.1, 0.25, 1)",
+        }}
       >
-        <div className="size-2.5 rounded-full bg-white shadow-[0_0_6px_rgba(255,255,255,0.8)]" />
+        <div className="size-3 rounded-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.9),0_1px_3px_rgba(0,0,0,0.5)]" />
       </div>
 
       {/* legenda dos times */}

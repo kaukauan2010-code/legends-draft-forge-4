@@ -85,55 +85,62 @@ function Draft() {
   return (
     <div className="mx-auto max-w-5xl px-4 py-4 space-y-4">
       {/* HEADER timer + stats */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-3">
-        <div className="min-w-0">
-          <div className="text-[10px] uppercase tracking-widest text-destructive">Janela de Draft</div>
-          <div className="text-xs text-muted-foreground">
-            Slot {s.escalacao.length}/11 ·{" "}
-            {pendente
-              ? <>Clique no campo no slot <span className="font-bold text-primary">{pendente.posicao}</span></>
-              : s.selecaoAtual
-                ? <>Escolha um jogador da seleção</>
-                : <>Aperte <span className="font-bold text-primary">SORTEAR</span> para a próxima seleção</>}
+      <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 space-y-2">
+        {/* linha 1: label + status */}
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="min-w-0">
+            <div className="text-[10px] uppercase tracking-widest text-destructive">Janela de Draft</div>
+            <div className="text-xs text-muted-foreground">
+              Slot {s.escalacao.length}/11 ·{" "}
+              {pendente
+                ? <>Clique no campo no slot <span className="font-bold text-primary">{pendente.posicao}</span></>
+                : s.selecaoAtual
+                  ? <>Escolha um jogador da seleção</>
+                  : <>Aperte <span className="font-bold text-primary">SORTEAR</span> para a próxima seleção</>}
+            </div>
+          </div>
+          {/* stats + rerolls/trocas na mesma linha */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <StatBadge icon={<Star className="size-3" />} label="Força" value={stats.forca} />
+            <StatBadge icon={<Sword className="size-3" />} label="Ataque" value={stats.ataque} />
+            <StatBadge icon={<Shield className="size-3" />} label="Defesa" value={stats.defesa} />
+            <div className="flex flex-col items-center">
+              <div className="flex items-center gap-1 text-[9px] uppercase tracking-widest text-muted-foreground">
+                <Dices className="size-3" />Rerolls
+              </div>
+              <div className="font-display text-lg font-black leading-none">{s.rerollsRestantes}/{limiteRerolls}</div>
+            </div>
+            <div className="flex flex-col items-center">
+              <div className="flex items-center gap-1 text-[9px] uppercase tracking-widest text-muted-foreground">
+                <Trash2 className="size-3" />Trocas
+              </div>
+              <div className="font-display text-lg font-black leading-none">{s.trocasRestantes}/{limiteTrocas}</div>
+            </div>
           </div>
         </div>
-        <div className="flex items-center gap-4">
-          <StatBadge icon={<Star className="size-3" />} label="Força" value={stats.forca} />
-          <StatBadge icon={<Sword className="size-3" />} label="Ataque" value={stats.ataque} />
-          <StatBadge icon={<Shield className="size-3" />} label="Defesa" value={stats.defesa} />
-          <div className="flex flex-col items-center">
-            <div className="flex items-center gap-1 text-[9px] uppercase tracking-widest text-muted-foreground">
-              <Dices className="size-3" />Rerolls
-            </div>
-            <div className="font-display text-lg font-black leading-none">{s.rerollsRestantes}/{limiteRerolls}</div>
-          </div>
-          <div className="flex flex-col items-center">
-            <div className="flex items-center gap-1 text-[9px] uppercase tracking-widest text-muted-foreground">
-              <Trash2 className="size-3" />Trocas
-            </div>
-            <div className="font-display text-lg font-black leading-none">{s.trocasRestantes}/{limiteTrocas}</div>
-          </div>
-          {(s.selecaoAtual || pendente) && (
-            <div className="flex flex-col items-end gap-1 min-w-[88px]">
-              <div className={cn(
-                "font-display text-3xl font-black tabular-nums leading-none",
+        {/* linha 2: contagem regressiva — ABAIXO da força, não ao lado */}
+        {(s.selecaoAtual || pendente) && (
+          <div className="flex flex-col gap-1 w-full">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] uppercase tracking-widest text-muted-foreground">Tempo restante</span>
+              <span className={cn(
+                "font-display text-xl font-black tabular-nums leading-none",
                 tempo <= 10 ? "text-destructive animate-pulse" : "text-foreground",
               )}>
                 00:{tempo.toString().padStart(2, "0")}
-              </div>
-              {/* barra de tempo regressiva */}
-              <div className="h-1.5 w-full overflow-hidden rounded-full bg-secondary">
-                <div
-                  className={cn(
-                    "h-full transition-all duration-1000 ease-linear",
-                    tempo <= 10 ? "bg-destructive" : "bg-primary",
-                  )}
-                  style={{ width: `${Math.max(0, Math.min(100, (tempo / 30) * 100))}%` }}
-                />
-              </div>
+              </span>
             </div>
-          )}
-        </div>
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-secondary">
+              <div
+                className={cn(
+                  "h-full transition-all duration-1000 ease-linear",
+                  tempo <= 10 ? "bg-destructive" : "bg-primary",
+                )}
+                style={{ width: `${Math.max(0, Math.min(100, (tempo / 30) * 100))}%` }}
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* GRID: lista de seleção (esquerda) + campo (direita) */}

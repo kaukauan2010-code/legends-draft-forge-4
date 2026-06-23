@@ -586,7 +586,7 @@ export const useCampanha = create<EstadoCampanha & CampanhaActions>()(
     }),
     {
       name: "campanha-world-cup-draft",
-      storage: createJSONStorage(() => (typeof window !== "undefined" ? sessionStorage : ({} as any))),
+      storage: createJSONStorage(() => (typeof window !== "undefined" ? localStorage : ({} as any))),
     }
   )
 );

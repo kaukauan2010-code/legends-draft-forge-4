@@ -67,7 +67,7 @@ export function PlayerCard({ jogador, esconderForca, esconderRaridade, onClick, 
         <span className="font-display text-xs text-muted-foreground w-6 shrink-0 text-center">#{jogador.numero}</span>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
-            <h4 className="font-display font-bold uppercase italic tracking-tight text-foreground truncate text-[13px] leading-tight">
+            <h4 className="font-display font-bold uppercase italic tracking-tight text-foreground truncate text-[11px] leading-tight">
               {jogador.nome}
             </h4>
             {!esconderRaridade && (
