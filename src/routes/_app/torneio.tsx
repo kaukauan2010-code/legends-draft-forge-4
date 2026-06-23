@@ -640,35 +640,59 @@ function Torneio() {
 
   // --- RESUMO PÓS-PARTIDA (cards dos dois times lado a lado) ---
   if (resumoPosJogo) {
-    const { meu: meuRes, adv: advRes, placar, faseLabel, minhaVitoria, empate } = resumoPosJogo;
+    const { meu: meuRes, adv: advRes, placar, faseLabel, minhaVitoria, empate, eventos } = resumoPosJogo;
     const corBorda = empate ? "border-yellow-500/50 bg-yellow-500/5" : minhaVitoria ? "border-primary/60 bg-primary/5" : "border-destructive/40 bg-destructive/5";
     const labelResultado = empate ? "Empate" : minhaVitoria ? "Vitória" : "Derrota";
     const corLabel = empate ? "text-yellow-500" : minhaVitoria ? "text-primary" : "text-destructive";
+    const golsCasa = extrairGols(eventos, "casa");
+    const golsFora = extrairGols(eventos, "fora");
     return (
       <div className="mx-auto max-w-md px-4 py-6 space-y-4 animate-enter pb-10">
         <div className={cn("rounded-2xl border-2 p-4 text-center", corBorda)}>
           <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-2">{faseLabel} · Fim de jogo</div>
           <div className="flex items-center justify-around">
             <div className="text-center flex-1">
-              <div className="text-3xl mb-1">🏆</div>
+              <div className="text-3xl mb-1">{meuRes.bandeira || "🏆"}</div>
               <div className="font-display text-xs uppercase truncate">{meuRes.nome}</div>
-              <div className="mt-1 flex items-center justify-center gap-1 text-[9px] uppercase tracking-widest text-muted-foreground">
-                <span className="size-2 rounded-full bg-blue-500" /> Azul
-              </div>
             </div>
             <div className="font-display text-4xl font-black tabular-nums">{placar}</div>
             <div className="text-center flex-1">
               <div className="text-3xl mb-1">{advRes.bandeira}</div>
               <div className="font-display text-xs uppercase truncate">{advRes.nome}</div>
-              <div className="mt-1 flex items-center justify-center gap-1 text-[9px] uppercase tracking-widest text-muted-foreground">
-                <span className="size-2 rounded-full bg-red-500" /> Vermelho
-              </div>
             </div>
           </div>
+
+          {/* Lista de gols (abaixo do placar) */}
+          {(golsCasa.length > 0 || golsFora.length > 0) && (
+            <div className="mt-3 grid grid-cols-2 gap-3 pt-3 border-t border-border/40 text-left">
+              <ul className="space-y-1">
+                {golsCasa.map((g, i) => (
+                  <li key={i} className="flex items-center gap-1.5 text-[11px] text-foreground">
+                    <span>⚽</span>
+                    <span className="font-medium truncate flex-1">{g.nome}</span>
+                    <span className="text-muted-foreground tabular-nums">{g.minuto}'</span>
+                    {g.penalti && <span className="text-[8px] bg-white/10 px-1 rounded">PEN</span>}
+                  </li>
+                ))}
+              </ul>
+              <ul className="space-y-1">
+                {golsFora.map((g, i) => (
+                  <li key={i} className="flex items-center gap-1.5 text-[11px] text-foreground justify-end">
+                    {g.penalti && <span className="text-[8px] bg-white/10 px-1 rounded">PEN</span>}
+                    <span className="text-muted-foreground tabular-nums">{g.minuto}'</span>
+                    <span className="font-medium truncate text-right flex-1">{g.nome}</span>
+                    <span>⚽</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           <p className={cn("mt-2 font-display uppercase text-sm font-black tracking-widest", corLabel)}>
             {labelResultado}
           </p>
         </div>
+
 
         <div className="grid grid-cols-2 gap-2">
           <TimeEscalacao time={meuRes} titulo="Seu time" />
