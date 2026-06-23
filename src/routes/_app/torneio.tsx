@@ -419,6 +419,8 @@ function Torneio() {
             </div>
           </section>
 
+          <MinhaSelecaoLateral meu={meu} />
+
           <Button
             onClick={() => setEtapaMata("chave")}
             className="w-full h-12 font-display uppercase tracking-widest font-black"
