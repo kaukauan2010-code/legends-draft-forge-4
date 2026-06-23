@@ -491,11 +491,13 @@ export const useCampanha = create<EstadoCampanha & CampanhaActions>()(
             penaltis: pens,
           }];
 
-          // Atualiza a chave com o resultado e vencedor deste confronto
+          // Atualiza a chave APENAS com vencedor/resultado/pênaltis — NÃO sobrescreve
+          // casa/fora originais, pois isso fazia o chaveamento visual (final, etc.) embaralhar
+          // a ordem que vinha das fases anteriores.
           const chaveAtual = s.chave;
           const fasesArr = chaveAtual[s.fase as "oitavas" | "quartas" | "semi" | "final"];
           const novaFaseArr = fasesArr.map(c =>
-            c.id === s.proximoConfronto!.id ? { ...c, casa: casaTime, fora: foraTime, resultado: res, penaltis: pens, vencedor } : c,
+            c.id === s.proximoConfronto!.id ? { ...c, resultado: res, penaltis: pens, vencedor } : c,
           );
           const novaChave: ChaveMata = { ...chaveAtual, [s.fase]: novaFaseArr };
 
