@@ -180,18 +180,16 @@ function Torneio() {
         // Usa o confronto capturado ANTES da simulação, pois proximoConfronto pode
         // já ter sido sobrescrito pelo confronto da fase seguinte.
         if (ultimoJogo?.penaltis) {
-          // Após o fix de normalização em campanha.ts, meu time é SEMPRE
-          // o `casa` na simulação/penaltis. Usa diretamente `meu`/`adv` em
-          // vez do confronto pré-normalizado para evitar inversão.
+          // BUG FIX: o resumo da partida NÃO deve aparecer quando vai para pênaltis.
+          // Garante que nenhum resumo previamente agendado tenha efeito limpando-o aqui.
+          setResumoPosJogo(null);
           const casaTime = meu;
           const foraTime = adv ?? meu;
           if (!casaTime || !foraTime) return;
-          setTimeout(() => {
-            // CRÍTICO: limpa partidaAtiva ANTES de mostrar pênaltis. Sem isso,
-            // o render fica preso na tela de partida ao vivo e a disputa nunca aparece.
-            setPartidaAtiva(null);
-            setPenaltisAoVivo({ casa: casaTime!, fora: foraTime!, cobrancas: ultimoJogo.penaltis!.cobrancas, indiceAtual: 0 });
-          }, 1200);
+          // Transição imediata para a tela de pênaltis (sem pausa de 1.2s que
+          // dava a falsa sensação de "card de resumo").
+          setPartidaAtiva(null);
+          setPenaltisAoVivo({ casa: casaTime!, fora: foraTime!, cobrancas: ultimoJogo.penaltis!.cobrancas, indiceAtual: 0 });
           return;
         }
         // Mostra o card de resumo com os DOIS times lado a lado antes de seguir.
