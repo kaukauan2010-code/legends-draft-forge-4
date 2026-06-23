@@ -111,6 +111,14 @@ function AuthPage() {
                 <Input id="s1" type="password" required value={senha} onChange={e => setSenha(e.target.value)} />
               </div>
               <Button type="submit" disabled={busy} className="w-full h-11 font-bold uppercase tracking-widest">Entrar</Button>
+              <button
+                type="button"
+                onClick={esqueciSenha}
+                disabled={busy}
+                className="block w-full text-center text-[11px] uppercase tracking-widest text-muted-foreground hover:text-primary underline mt-1"
+              >
+                Esqueci minha senha
+              </button>
             </form>
           </TabsContent>
           <TabsContent value="cadastro">
