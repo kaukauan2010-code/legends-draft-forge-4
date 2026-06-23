@@ -1046,6 +1046,52 @@ function TimeBlock({ time }: { time: Time }) {
   );
 }
 
+// Card lateral compacto com os 11 jogadores da minha seleção (raridade, força,
+// número), exibido nas telas de apresentação de grupos e de chaveamento. Mostra
+// também os totais de ataque/defesa/força em destaque, igual à seleção de personagens.
+function MinhaSelecaoLateral({ meu }: { meu: Time }) {
+  const st = statsTime(meu);
+  // ordena defesa → ataque (slot.y maior primeiro)
+  const ordenados = [...meu.escalacao].sort((a, b) => {
+    const slotA = meu.formacao.slots.find(s => s.id === a.slotId);
+    const slotB = meu.formacao.slots.find(s => s.id === b.slotId);
+    return (slotB?.y ?? 0) - (slotA?.y ?? 0);
+  });
+  return (
+    <section className="rounded-2xl border border-primary/40 bg-card p-3">
+      <div className="flex items-center justify-between mb-2">
+        <h2 className="font-display uppercase text-xs tracking-widest text-primary">Minha seleção</h2>
+        <span className="text-[9px] uppercase tracking-widest text-muted-foreground">{meu.formacao.nome}</span>
+      </div>
+      <div className="grid grid-cols-3 gap-1 mb-3 rounded-lg bg-secondary/40 p-2">
+        <Stat label="Força" value={st.forca} />
+        <Stat label="Ataque" value={st.ataque} />
+        <Stat label="Defesa" value={st.defesa} />
+      </div>
+      <ul className="space-y-1">
+        {ordenados.map(j => (
+          <li key={j.slotId} className={cn(
+            "flex items-center gap-2 rounded border-l-4 bg-secondary/40 px-2 py-1",
+            RARIDADE_BORDER_CLASS[j.raridade],
+          )}>
+            <span className={cn("font-display text-xs font-black w-5 text-center tabular-nums", RARIDADE_TEXT_CLASS[j.raridade])}>{j.numero}</span>
+            <div className="flex-1 min-w-0">
+              <div className="text-[11px] font-bold leading-tight truncate">{j.nome}</div>
+              <div className="flex items-center gap-1 text-[8px] uppercase tracking-widest">
+                <span className="text-muted-foreground">{j.posicao}</span>
+                <span className="text-muted-foreground">·</span>
+                <span className={cn("font-bold", RARIDADE_TEXT_CLASS[j.raridade])}>{RARIDADE_LABEL[j.raridade]}</span>
+              </div>
+            </div>
+            <span className="font-display text-sm font-black tabular-nums">{j.forcaEfetiva}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+
 // Mini-card vertical com o 11 inicial (cor de raridade + número + nome + força).
 // Usado no resumo pós-partida para mostrar meu time e adversário lado a lado.
 function TimeEscalacao({ time, titulo }: { time: Time; titulo: string }) {
