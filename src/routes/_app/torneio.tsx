@@ -15,6 +15,7 @@ import { statsTime } from "@/lib/simulador";
 import { RARIDADE_CSS, RARIDADE_TEXT_CLASS, RARIDADE_BORDER_CLASS, RARIDADE_LABEL } from "@/lib/selecoes";
 import { CampoAoVivo } from "@/components/CampoAoVivo";
 import { ChaveamentoVisual } from "@/components/ChaveamentoVisual";
+import { FlagEmoji } from "@/components/FlagEmoji";
 import { toast } from "sonner";
 
 type Velocidade = "normal" | "rapida" | "ultra";
@@ -52,6 +53,26 @@ function Torneio() {
   useEffect(() => {
     if (s.mostrarChaveamento) setEtapaMata("preview");
   }, [s.mostrarChaveamento]);
+
+  // Modo automático: avança automaticamente pelo fluxo de mata-mata
+  // preview (2s) → chaveamento (2s) → iniciar partida
+  useEffect(() => {
+    if (!s.modoAutomatico || !s.mostrarChaveamento) return;
+    // Vai de preview para chaveamento após 2s
+    if (etapaMata === "preview") {
+      const t = setTimeout(() => setEtapaMata("chave"), 2000);
+      return () => clearTimeout(t);
+    }
+    // Do chaveamento, inicia a partida após 2.5s
+    if (etapaMata === "chave") {
+      const t = setTimeout(() => {
+        s.confirmarChaveamento();
+        setTimeout(() => jogarPartida(), 100);
+      }, 2500);
+      return () => clearTimeout(t);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [s.modoAutomatico, s.mostrarChaveamento, etapaMata]);
   const [salvou, setSalvou] = useState(false);
   const intervaloRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const autoTimeoutRef = useRef<ReturnType<typeof setTimeout> | ReturnType<typeof setInterval> | null>(null);
@@ -215,9 +236,17 @@ function Torneio() {
           setPartidaAtiva(null);
           const estado = useCampanha.getState();
           if (estado.modoAutomatico && estado.fase !== "campeao" && estado.fase !== "eliminado") {
-            // Em automático, fecha o resumo sozinho depois e arranca a próxima.
-            if (estado.mostrarApresentacaoGrupos || estado.mostrarChaveamento) return;
-            setTimeout(() => { setResumoPosJogo(null); iniciarContagemAuto(); }, 3500);
+            // Em automático, fecha o resumo sozinho depois.
+            // Se há chaveamento pendente, o resumo fecha e o chaveamento abre em seguida.
+            // Aguarda 3.5s para o jogador ver o resultado antes de avançar.
+            setTimeout(() => {
+              setResumoPosJogo(null);
+              const estadoPos2 = useCampanha.getState();
+              if (!estadoPos2.mostrarChaveamento && !estadoPos2.mostrarApresentacaoGrupos) {
+                iniciarContagemAuto();
+              }
+              // Se há chaveamento, o useEffect de auto-avance do mata-mata cuidará disso
+            }, 3500);
           }
         }, 1500);
       }
@@ -261,7 +290,13 @@ function Torneio() {
   // confirmada, retoma o ciclo automaticamente.
   const avancarAutomatico = () => {
     if (s.modoAutomatico) {
-      autoTimeoutRef.current = setTimeout(() => jogarPartida(), 600);
+      // No mata-mata, avança automaticamente pelo fluxo: preview → chave → partida
+      if (s.mostrarChaveamento) {
+        // Já vai ser chamado depois que confirmarChaveamento() liberar o estado
+        autoTimeoutRef.current = setTimeout(() => jogarPartida(), 800);
+      } else {
+        autoTimeoutRef.current = setTimeout(() => jogarPartida(), 600);
+      }
     }
   };
 
@@ -285,7 +320,7 @@ function Torneio() {
           <div className="text-[10px] uppercase tracking-widest text-muted-foreground text-center mb-2">{(faseAtiva ?? s.fase).toUpperCase()}</div>
           <div className="flex items-center justify-around">
             <div className="text-center flex-1">
-              <div className="text-2xl mb-1">{meu.bandeira || "🏆"}</div>
+              <div className="text-2xl mb-1"><FlagEmoji emoji={meu.bandeira || "🏆"} size={32} /></div>
               <div className="font-display text-xs uppercase truncate">{meu.nome}</div>
               <div className="mt-1 flex items-center justify-center gap-1 text-[9px] uppercase tracking-widest text-muted-foreground">
                 <span className="size-2 rounded-full bg-blue-500" /> Azul
@@ -293,7 +328,7 @@ function Torneio() {
             </div>
             <div className="font-display text-5xl font-black tabular-nums">{placar[0]}–{placar[1]}</div>
             <div className="text-center flex-1">
-              <div className="text-2xl mb-1">{adversarioAtivo?.bandeira ?? "🤖"}</div>
+              <div className="text-2xl mb-1"><FlagEmoji emoji={adversarioAtivo?.bandeira ?? "🤖"} size={32} /></div>
               <div className="font-display text-xs uppercase truncate">{adversarioAtivo?.nome ?? "Adversário"}</div>
               <div className="mt-1 flex items-center justify-center gap-1 text-[9px] uppercase tracking-widest text-muted-foreground">
                 <span className="size-2 rounded-full bg-red-500" /> Vermelho
@@ -361,7 +396,7 @@ function Torneio() {
                     "flex items-center gap-2 text-xs rounded px-2 py-1",
                     !t.time.isCPU && "bg-primary/10 font-bold",
                   )}>
-                    <span>{t.time.bandeira}</span>
+                    <FlagEmoji emoji={t.time.bandeira} size={16} />
                     <span className="truncate flex-1">{t.time.nome}</span>
                   </li>
                 ))}
@@ -455,7 +490,6 @@ function Torneio() {
           <Button
             onClick={() => {
               s.confirmarChaveamento();
-              // Inicia a próxima partida imediatamente (sem passar pela tela do lobby).
               setTimeout(() => jogarPartida(), 0);
             }}
             className="h-12 font-display uppercase tracking-widest font-black"
@@ -512,7 +546,7 @@ function Torneio() {
         <header className="p-6 space-y-6">
           <div className="flex justify-between items-end gap-2">
             <div className="flex flex-col items-start gap-1 min-w-0">
-              <span className="text-4xl">{flagCasa}</span>
+              <FlagEmoji emoji={flagCasa} size={40} />
               <h2 className="font-pen-display text-2xl tracking-wide truncate max-w-[10ch]">{nomeCasa}</h2>
               <div className="flex gap-1.5">
                 {indCasa.map((st, i) => (
@@ -537,7 +571,7 @@ function Torneio() {
             </div>
 
             <div className="flex flex-col items-end gap-1 min-w-0">
-              <span className="text-4xl">{flagFora}</span>
+              <FlagEmoji emoji={flagFora} size={40} />
               <h2 className="font-pen-display text-2xl tracking-wide truncate max-w-[10ch]">{nomeFora}</h2>
               <div className="flex gap-1.5">
                 {indFora.map((st, i) => (
@@ -659,12 +693,12 @@ function Torneio() {
           <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-2">{faseLabel} · Fim de jogo</div>
           <div className="flex items-center justify-around">
             <div className="text-center flex-1">
-              <div className="text-3xl mb-1">{meuRes.bandeira || "🏆"}</div>
+              <div className="text-3xl mb-1"><FlagEmoji emoji={meuRes.bandeira || "🏆"} size={36} /></div>
               <div className="font-display text-xs uppercase truncate">{meuRes.nome}</div>
             </div>
             <div className="font-display text-4xl font-black tabular-nums">{placar}</div>
             <div className="text-center flex-1">
-              <div className="text-3xl mb-1">{advRes.bandeira}</div>
+              <div className="text-3xl mb-1"><FlagEmoji emoji={advRes.bandeira} size={36} /></div>
               <div className="font-display text-xs uppercase truncate">{advRes.nome}</div>
             </div>
           </div>
@@ -828,7 +862,7 @@ function Torneio() {
                 )}>
                   <span className="flex items-center gap-2">
                     <span className="text-muted-foreground w-4">{i + 1}</span>
-                    {t.time.bandeira} <span className="truncate max-w-[150px]">{t.time.nome}</span>
+                    <FlagEmoji emoji={t.time.bandeira} size={14} /> <span className="truncate max-w-[150px]">{t.time.nome}</span>
                   </span>
                   <span className="font-mono text-xs tabular-nums">
                     {t.jogos}j · {t.pts}pts · {t.gp}:{t.gc}
@@ -1039,7 +1073,7 @@ function TimeBlock({ time }: { time: Time }) {
   const st = statsTime(time);
   return (
     <div className="text-center min-w-0">
-      <div className="text-3xl">{time.bandeira}</div>
+      <div className="text-3xl"><FlagEmoji emoji={time.bandeira} size={36} /></div>
       <div className="font-bold text-sm mt-1 truncate">{time.nome}</div>
       <div className="mt-2 flex justify-center gap-2 text-[10px]">
         <Stat label="FOR" value={st.forca} />
@@ -1103,7 +1137,7 @@ function TimeEscalacao({ time, titulo }: { time: Time; titulo: string }) {
     <div className="rounded-xl border border-border bg-card p-2">
       <div className="text-[9px] uppercase tracking-widest text-muted-foreground text-center mb-1">{titulo}</div>
       <div className="flex items-center gap-1 mb-2 justify-center">
-        <span className="text-base">{time.isCPU ? time.bandeira : "🏆"}</span>
+        <FlagEmoji emoji={time.isCPU ? time.bandeira : "🏆"} size={16} />
         <span className="font-display text-[10px] uppercase font-bold truncate">{time.nome}</span>
       </div>
       <ul className="space-y-1">
