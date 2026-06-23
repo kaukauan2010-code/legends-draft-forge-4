@@ -55,12 +55,20 @@ function Perfil() {
 
   const trocarSenha = useMutation({
     mutationFn: async () => {
+      if (!senhaAtual) throw new Error("Informe a senha atual");
       if (novaSenha.length < 6) throw new Error("Senha deve ter pelo menos 6 caracteres");
       if (novaSenha !== confSenha) throw new Error("As senhas não coincidem");
+      if (senhaAtual === novaSenha) throw new Error("A nova senha deve ser diferente da atual");
+      // Reautentica primeiro para validar a senha original (Supabase não exige por padrão).
+      const { error: signErr } = await supabase.auth.signInWithPassword({
+        email: user!.email!,
+        password: senhaAtual,
+      });
+      if (signErr) throw new Error("Senha atual incorreta");
       const { error } = await supabase.auth.updateUser({ password: novaSenha });
       if (error) throw error;
     },
-    onSuccess: () => { toast.success("Senha atualizada"); setNovaSenha(""); setConfSenha(""); },
+    onSuccess: () => { toast.success("Senha atualizada"); setSenhaAtual(""); setNovaSenha(""); setConfSenha(""); },
     onError: (e: any) => toast.error(e.message),
   });
 
