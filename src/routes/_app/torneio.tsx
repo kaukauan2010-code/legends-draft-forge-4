@@ -441,6 +441,9 @@ function Torneio() {
 
         <ChaveamentoVisual chave={s.chave} faseAtual={faseChave} />
 
+        <MinhaSelecaoLateral meu={meu} />
+
+
         <div className="grid grid-cols-2 gap-2">
           <Button
             variant="outline"
