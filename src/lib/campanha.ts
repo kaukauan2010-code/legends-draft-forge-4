@@ -76,6 +76,7 @@ export interface EstadoCampanha {
   mostrarApresentacaoGrupos: boolean;
   mostrarChaveamento: FaseTorneio | null; // qual fase de mata-mata mostrar o chaveamento antes de jogar
   modoAutomatico: boolean;
+  jaFoiSalvo: boolean; // evita re-salvar ao navegar de volta
 }
 
 interface CampanhaActions {
@@ -87,6 +88,7 @@ interface CampanhaActions {
   usarReroll: () => void;
   excluirJogador: (slotId: string) => boolean;
   forcarFimDraft: () => void;
+  sortearAleatorio: () => void;
   comecarTorneio: () => void;
   confirmarApresentacaoGrupos: () => void;
   confirmarChaveamento: () => void;
@@ -94,6 +96,7 @@ interface CampanhaActions {
   resetar: () => void;
   tentarNovamente: () => void;
   setModoAutomatico: (v: boolean) => void;
+  setJaFoiSalvo: (v: boolean) => void;
   meuTime: () => Time | null;
   adversarioAtual: () => Time | null;
 }
@@ -112,6 +115,7 @@ function estadoInicial(): EstadoCampanha {
     historicoJogos: [], trocasRestantes: 0,
     mostrarApresentacaoGrupos: false, mostrarChaveamento: null,
     modoAutomatico: false,
+    jaFoiSalvo: false,
   };
 }
 
@@ -285,6 +289,8 @@ export const useCampanha = create<EstadoCampanha & CampanhaActions>()(
 
       setModoAutomatico: (v) => set({ modoAutomatico: v }),
 
+      setJaFoiSalvo: (v) => set({ jaFoiSalvo: v }),
+
       meuTime: () => {
         const s = get();
         if (!s.config || s.escalacao.length < 11) return null;
@@ -315,6 +321,47 @@ export const useCampanha = create<EstadoCampanha & CampanhaActions>()(
         if (!confronto) return null;
         if (confronto.casa && !confronto.casa.isCPU) return confronto.fora ?? null;
         return confronto.casa ?? null;
+      },
+
+      sortearAleatorio: () => {
+        // Preenche todos os slots livres com jogadores aleatórios de qualquer seleção,
+        // respeitando posição e sem repetir nomes.
+        const s = get();
+        if (!s.slotsRestantes.length || !s.config) return;
+        const nomesUsados = new Set(s.nomesJaEscolhidos);
+        const novaEscalacao: typeof s.escalacao = [...s.escalacao];
+        const novosNomes: string[] = [...s.nomesJaEscolhidos];
+        const slotsRestantesApos: typeof s.slotsRestantes = [];
+
+        // Pool embaralhado de todos os jogadores de todas as seleções
+        const todosJogadores = [...SELECOES]
+          .sort(() => Math.random() - 0.5)
+          .flatMap(sel => sel.jogadores);
+
+        for (const slot of s.slotsRestantes) {
+          const aceitas = posicoesCompativeis(slot.posicao);
+          const candidatos = todosJogadores.filter(j =>
+            aceitas.includes(j.posicao) && !nomesUsados.has(j.nome)
+          );
+          if (!candidatos.length) { slotsRestantesApos.push(slot); continue; }
+          const escolhido = candidatos[Math.floor(Math.random() * candidatos.length)]!;
+          nomesUsados.add(escolhido.nome);
+          novosNomes.push(escolhido.nome);
+          novaEscalacao.push({
+            ...escolhido,
+            slotId: slot.id,
+            improvisado: escolhido.posicao !== slot.posicao,
+            forcaEfetiva: escolhido.forca,
+          });
+        }
+
+        set({
+          escalacao: novaEscalacao,
+          slotsRestantes: slotsRestantesApos,
+          nomesJaEscolhidos: novosNomes,
+          jogadorPendente: null,
+          selecaoAtual: null,
+        });
       },
 
       comecarTorneio: () => {
@@ -506,11 +553,12 @@ export const useCampanha = create<EstadoCampanha & CampanhaActions>()(
               historicoJogos: novoHist,
               chave: novaChave,
               proximoConfronto: { ...confrontoNormalizado, resultado: res, penaltis: pens, vencedor },
+              jaFoiSalvo: false,
             });
             return res;
           }
           if (s.fase === "final") {
-            set({ fase: "campeao", historicoJogos: novoHist, chave: novaChave });
+            set({ fase: "campeao", historicoJogos: novoHist, chave: novaChave, jaFoiSalvo: false });
             return res;
           }
 

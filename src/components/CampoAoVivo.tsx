@@ -318,7 +318,7 @@ export function CampoAoVivo({ casa, fora, eventoAtual, cobrancaAtual, modo = "pa
   }, [cobrancaAtual?.rodada, cobrancaAtual?.time, modo]);
 
   return (
-    <div className="relative aspect-[5/6] w-full max-w-[220px] mx-auto overflow-hidden rounded-xl border-2 border-white/10 shadow-inner"
+    <div className="relative aspect-[5/6] w-full max-w-[180px] mx-auto overflow-hidden rounded-xl border-2 border-white/10 shadow-inner"
          style={{ background: "linear-gradient(to bottom, var(--color-pitch) 0%, var(--color-pitch-dark) 50%, var(--color-pitch) 100%)" }}>
       {/* linhas */}
       <div className="pointer-events-none absolute inset-2 rounded border border-white/25" />
@@ -349,7 +349,7 @@ export function CampoAoVivo({ casa, fora, eventoAtual, cobrancaAtual, modo = "pa
           >
             <div
               className={cn(
-                "grid size-5 place-items-center rounded-full border text-[7px] font-black text-white shadow",
+                "grid size-4 place-items-center rounded-full border text-[6px] font-black text-white shadow",
                 p.timeCasa ? COR_CASA : COR_FORA,
                 !p.timeCasa && "opacity-90",
                 destaque === p.id && "ring-2 ring-white scale-150 z-10",

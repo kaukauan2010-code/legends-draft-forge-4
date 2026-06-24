@@ -73,7 +73,7 @@ function Torneio() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [s.modoAutomatico, s.mostrarChaveamento, etapaMata]);
-  const [salvou, setSalvou] = useState(false);
+  const [salvou, setSalvou] = useState(s.jaFoiSalvo ?? false);
   const intervaloRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const autoTimeoutRef = useRef<ReturnType<typeof setTimeout> | ReturnType<typeof setInterval> | null>(null);
 
@@ -98,16 +98,22 @@ function Torneio() {
       });
       if (error) throw error;
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["stats"] }); qc.invalidateQueries({ queryKey: ["historico"] }); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["stats"] });
+      qc.invalidateQueries({ queryKey: ["historico"] });
+      useCampanha.getState().setJaFoiSalvo(true);
+    },
   });
 
-  // salvar campanha quando termina
+  // salvar campanha quando termina — usa timestamp do histórico para evitar duplicatas
+  // quando o usuário navega e volta (salvou reseta, mas s.fase e historicoJogos persistem)
   useEffect(() => {
     if ((s.fase === "campeao" || s.fase === "eliminado") && !salvou && user) {
+      // Checa se a partida já foi salva consultando o histórico local via flag no store
       setSalvou(true);
       salvarPartida.mutate();
     }
-  }, [s.fase, salvou, user, salvarPartida]);
+  }, [s.fase, salvou, user]);
 
   // Inicia a contagem regressiva visível antes da próxima partida automática.
   // Substitui o antigo setTimeout silencioso por um setInterval que atualiza
@@ -315,28 +321,28 @@ function Torneio() {
   if (partidaAtiva) {
     const placar = partidaAtiva.placar.split(" x ");
     return (
-      <div className="mx-auto max-w-md px-4 py-6 space-y-4">
+      <div className="mx-auto max-w-sm px-3 py-3 space-y-3">
         <div className="rounded-2xl border border-border bg-card p-4">
-          <div className="text-[10px] uppercase tracking-widest text-muted-foreground text-center mb-2">{(faseAtiva ?? s.fase).toUpperCase()}</div>
+          <div className="text-[9px] uppercase tracking-widest text-muted-foreground text-center mb-1.5">{(faseAtiva ?? s.fase).toUpperCase()}</div>
           <div className="flex items-center justify-around">
             <div className="text-center flex-1">
-              <div className="text-2xl mb-1"><FlagEmoji emoji={meu.bandeira || "🏆"} size={32} /></div>
-              <div className="font-display text-xs uppercase truncate">{meu.nome}</div>
-              <div className="mt-1 flex items-center justify-center gap-1 text-[9px] uppercase tracking-widest text-muted-foreground">
-                <span className="size-2 rounded-full bg-blue-500" /> Azul
+              <div className="mb-0.5"><FlagEmoji emoji={meu.bandeira || "🏆"} size={24} /></div>
+              <div className="font-display text-[10px] uppercase truncate">{meu.nome}</div>
+              <div className="flex items-center justify-center gap-1 text-[8px] uppercase tracking-widest text-muted-foreground">
+                <span className="size-1.5 rounded-full bg-blue-500" /> Azul
               </div>
             </div>
-            <div className="font-display text-5xl font-black tabular-nums">{placar[0]}–{placar[1]}</div>
+            <div className="font-display text-4xl font-black tabular-nums">{placar[0]}–{placar[1]}</div>
             <div className="text-center flex-1">
-              <div className="text-2xl mb-1"><FlagEmoji emoji={adversarioAtivo?.bandeira ?? "🤖"} size={32} /></div>
-              <div className="font-display text-xs uppercase truncate">{adversarioAtivo?.nome ?? "Adversário"}</div>
-              <div className="mt-1 flex items-center justify-center gap-1 text-[9px] uppercase tracking-widest text-muted-foreground">
-                <span className="size-2 rounded-full bg-red-500" /> Vermelho
+              <div className="mb-0.5"><FlagEmoji emoji={adversarioAtivo?.bandeira ?? "🤖"} size={24} /></div>
+              <div className="font-display text-[10px] uppercase truncate">{adversarioAtivo?.nome ?? "Adversário"}</div>
+              <div className="flex items-center justify-center gap-1 text-[8px] uppercase tracking-widest text-muted-foreground">
+                <span className="size-1.5 rounded-full bg-red-500" /> Vermelho
               </div>
             </div>
           </div>
-          <div className="mt-3 text-center text-primary font-mono text-sm">{partidaAtiva.minuto}'</div>
-          <div className="mt-2 h-1 rounded bg-border overflow-hidden">
+          <div className="mt-2 text-center text-primary font-mono text-xs">{partidaAtiva.minuto}'</div>
+          <div className="mt-1 h-1 rounded bg-border overflow-hidden">
             <div className="h-full bg-primary transition-all" style={{ width: `${(partidaAtiva.minuto / 90) * 100}%` }} />
           </div>
         </div>
@@ -350,7 +356,7 @@ function Torneio() {
           />
         )}
 
-        <div className="rounded-2xl border border-border bg-card p-3 h-72 overflow-y-auto flex flex-col-reverse">
+        <div className="rounded-xl border border-border bg-card p-2.5 h-48 overflow-y-auto flex flex-col-reverse">
           <div className="space-y-1.5">
             {partidaAtiva.eventos.map((e, i) => (
               <div key={i} className={cn(
@@ -378,25 +384,25 @@ function Torneio() {
           <p className="text-sm text-muted-foreground mt-1">32 times · 8 grupos · top 2 de cada avança às oitavas</p>
         </header>
 
-        <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-2">
           {s.grupos.map((g, gi) => (
             <div key={g.nome} className={cn(
-              "rounded-xl border bg-card p-3",
+              "rounded-lg border bg-card p-2",
               gi === s.meuGrupoIndex ? "border-primary" : "border-border",
             )}>
-              <div className="flex items-center justify-between mb-2">
-                <span className="font-display uppercase tracking-tight font-bold text-sm">Grupo {g.nome}</span>
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="font-display uppercase tracking-tight font-bold text-[11px]">Grupo {g.nome}</span>
                 {gi === s.meuGrupoIndex && (
-                  <span className="text-[9px] uppercase tracking-widest text-primary font-bold">Seu grupo</span>
+                  <span className="text-[8px] uppercase tracking-widest text-primary font-bold">Meu</span>
                 )}
               </div>
-              <ul className="space-y-1">
+              <ul className="space-y-0.5">
                 {g.times.map((t, i) => (
                   <li key={i} className={cn(
-                    "flex items-center gap-2 text-xs rounded px-2 py-1",
+                    "flex items-center gap-1 text-[10px] rounded px-1.5 py-0.5",
                     !t.time.isCPU && "bg-primary/10 font-bold",
                   )}>
-                    <FlagEmoji emoji={t.time.bandeira} size={16} />
+                    <FlagEmoji emoji={t.time.bandeira} size={12} />
                     <span className="truncate flex-1">{t.time.nome}</span>
                   </li>
                 ))}
@@ -847,31 +853,32 @@ function Torneio() {
       </header>
 
       {s.fase === "grupos" && s.grupos[s.meuGrupoIndex] && (
-        <section className="rounded-2xl border border-border bg-card p-4">
-          <h2 className="font-display uppercase text-sm tracking-widest text-muted-foreground mb-3">
+        <section className="rounded-xl border border-border bg-card p-3">
+          <h2 className="font-display uppercase text-[10px] tracking-widest text-muted-foreground mb-2">
             Grupo {s.grupos[s.meuGrupoIndex]!.nome}
           </h2>
-          <div className="space-y-1">
+          <div className="space-y-0.5">
             {[...s.grupos[s.meuGrupoIndex]!.times]
               .sort((a, b) => b.pts - a.pts || (b.gp - b.gc) - (a.gp - a.gc))
               .map((t, i) => (
                 <div key={i} className={cn(
-                  "flex items-center justify-between rounded-md px-2 py-2 text-sm",
+                  "flex items-center justify-between rounded px-2 py-1 text-[11px]",
                   !t.time.isCPU && "bg-primary/10 font-bold",
                   i < 2 && "border-l-2 border-primary",
                 )}>
-                  <span className="flex items-center gap-2">
-                    <span className="text-muted-foreground w-4">{i + 1}</span>
-                    <FlagEmoji emoji={t.time.bandeira} size={14} /> <span className="truncate max-w-[150px]">{t.time.nome}</span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="text-muted-foreground w-3">{i + 1}</span>
+                    <FlagEmoji emoji={t.time.bandeira} size={12} />
+                    <span className="truncate max-w-[110px]">{t.time.nome}</span>
                   </span>
-                  <span className="font-mono text-xs tabular-nums">
-                    {t.jogos}j · {t.pts}pts · {t.gp}:{t.gc}
+                  <span className="font-mono text-[10px] tabular-nums text-muted-foreground">
+                    {t.jogos}j {t.pts}pts {t.gp}:{t.gc}
                   </span>
                 </div>
               ))}
           </div>
-          <p className="text-[9px] uppercase tracking-widest text-muted-foreground text-center mt-2">
-            Os 2 primeiros avançam às oitavas
+          <p className="text-[8px] uppercase tracking-widest text-muted-foreground text-center mt-1.5">
+            Top 2 avançam às oitavas
           </p>
         </section>
       )}

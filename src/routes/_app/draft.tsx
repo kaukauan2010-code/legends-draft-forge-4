@@ -4,12 +4,11 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useCampanha } from "@/lib/campanha";
 import { FORMACOES } from "@/lib/formacoes";
 import { MiniCampo } from "@/components/MiniCampo";
-import { PlayerCard } from "@/components/PlayerCard";
 import { Button } from "@/components/ui/button";
-import { Dices, Shuffle, Shield, Sword, Star, Trash2, X, Lock } from "lucide-react";
+import { Dices, Shuffle, Shield, Sword, Star, Trash2, X, Lock, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { statsEscalacao } from "@/lib/simulador";
-import { RARIDADE_CSS, posicoesCompativeis } from "@/lib/selecoes";
+import { RARIDADE_CSS, RARIDADE_TEXT_CLASS, RARIDADE_BORDER_CLASS, RARIDADE_LABEL, posicoesCompativeis } from "@/lib/selecoes";
 import { cn } from "@/lib/utils";
 import { FlagEmoji } from "@/components/FlagEmoji";
 
@@ -66,7 +65,7 @@ function Draft() {
   const limiteTrocas = s.config.modo === "classico" ? 3 : 1;
   const limiteRerolls = s.config.modo === "classico" ? 3 : 1;
 
-  // Lista de slots (ordenada da defesa pro ataque) para mostrar embaixo
+  // Lista de slots (ordenada da defesa pro ataque) para mostrar
   const slotsOrdenados = [...formacao.slots].sort((a, b) => b.y - a.y);
   const ocupados = new Map(s.escalacao.map(j => [j.slotId, j]));
   const jogadorParaExcluir = slotParaExcluir ? ocupados.get(slotParaExcluir) : undefined;
@@ -83,59 +82,40 @@ function Draft() {
   };
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-4 space-y-4">
-      {/* HEADER timer + stats */}
-      <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 space-y-2">
-        {/* linha 1: label + status */}
+    <div className="mx-auto max-w-5xl px-3 py-3 space-y-3">
+      {/* HEADER compacto: stats + timer */}
+      <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 space-y-1.5">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div className="min-w-0">
-            <div className="text-[10px] uppercase tracking-widest text-destructive">Janela de Draft</div>
-            <div className="text-xs text-muted-foreground">
-              Slot {s.escalacao.length}/11 ·{" "}
+            <div className="text-[9px] uppercase tracking-widest text-destructive font-bold">Janela de Draft · Slot {s.escalacao.length}/11</div>
+            <div className="text-[10px] text-muted-foreground">
               {pendente
-                ? <>Clique no campo no slot <span className="font-bold text-primary">{pendente.posicao}</span></>
+                ? <>Clique no campo: slot <span className="font-bold text-primary">{pendente.posicao}</span></>
                 : s.selecaoAtual
                   ? <>Escolha um jogador da seleção</>
                   : <>Aperte <span className="font-bold text-primary">SORTEAR</span> para a próxima seleção</>}
             </div>
           </div>
-          {/* stats + rerolls/trocas na mesma linha */}
-          <div className="flex items-center gap-3 flex-wrap">
-            <StatBadge icon={<Star className="size-3" />} label="Força" value={stats.forca} />
-            <StatBadge icon={<Sword className="size-3" />} label="Ataque" value={stats.ataque} />
-            <StatBadge icon={<Shield className="size-3" />} label="Defesa" value={stats.defesa} />
-            <div className="flex flex-col items-center">
-              <div className="flex items-center gap-1 text-[9px] uppercase tracking-widest text-muted-foreground">
-                <Dices className="size-3" />Rerolls
-              </div>
-              <div className="font-display text-lg font-black leading-none">{s.rerollsRestantes}/{limiteRerolls}</div>
-            </div>
-            <div className="flex flex-col items-center">
-              <div className="flex items-center gap-1 text-[9px] uppercase tracking-widest text-muted-foreground">
-                <Trash2 className="size-3" />Trocas
-              </div>
-              <div className="font-display text-lg font-black leading-none">{s.trocasRestantes}/{limiteTrocas}</div>
-            </div>
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <MiniStat icon={<Star className="size-2.5" />} label="Força" value={stats.forca} />
+            <MiniStat icon={<Sword className="size-2.5" />} label="Atk" value={stats.ataque} />
+            <MiniStat icon={<Shield className="size-2.5" />} label="Def" value={stats.defesa} />
+            <div className="w-px h-6 bg-border" />
+            <MiniStat icon={<Dices className="size-2.5" />} label="Rerolls" value={`${s.rerollsRestantes}/${limiteRerolls}`} />
+            <MiniStat icon={<Trash2 className="size-2.5" />} label="Trocas" value={`${s.trocasRestantes}/${limiteTrocas}`} />
           </div>
         </div>
-        {/* linha 2: contagem regressiva — ABAIXO da força, não ao lado */}
         {(s.selecaoAtual || pendente) && (
-          <div className="flex flex-col gap-1 w-full">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] uppercase tracking-widest text-muted-foreground">Tempo restante</span>
-              <span className={cn(
-                "font-display text-xl font-black tabular-nums leading-none",
-                tempo <= 10 ? "text-destructive animate-pulse" : "text-foreground",
-              )}>
-                00:{tempo.toString().padStart(2, "0")}
-              </span>
-            </div>
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-secondary">
+          <div className="flex items-center gap-2">
+            <span className={cn(
+              "font-display text-base font-black tabular-nums shrink-0",
+              tempo <= 10 ? "text-destructive animate-pulse" : "text-foreground",
+            )}>
+              00:{tempo.toString().padStart(2, "0")}
+            </span>
+            <div className="flex-1 h-1.5 overflow-hidden rounded-full bg-secondary">
               <div
-                className={cn(
-                  "h-full transition-all duration-1000 ease-linear",
-                  tempo <= 10 ? "bg-destructive" : "bg-primary",
-                )}
+                className={cn("h-full transition-all duration-1000 ease-linear", tempo <= 10 ? "bg-destructive" : "bg-primary")}
                 style={{ width: `${Math.max(0, Math.min(100, (tempo / 30) * 100))}%` }}
               />
             </div>
@@ -143,173 +123,185 @@ function Draft() {
         )}
       </div>
 
-      {/* GRID: lista de seleção (esquerda) + campo (direita) */}
-      <div className="grid gap-4 md:grid-cols-[300px_minmax(0,1fr)]">
-        {/* LISTA DE SELEÇÃO — jogadores disponíveis para escolher */}
-        <aside className="rounded-2xl border border-border bg-card p-3 order-2 md:order-1">
+      {/* GRID PRINCIPAL: lista de seleção | campo | escalação */}
+      <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] gap-3">
+
+        {/* COL 1: Jogadores disponíveis da seleção sorteada */}
+        <div className="rounded-xl border border-border bg-card p-2.5">
           <div className="flex items-center justify-between mb-2">
-            <h2 className="text-xs uppercase tracking-widest text-muted-foreground">
-              {s.selecaoAtual ? "Escolha um jogador" : "Aguardando sorteio"}
+            <h2 className="text-[9px] uppercase tracking-widest text-muted-foreground font-bold">
+              {s.selecaoAtual ? "Escolha 1 jogador" : "Aguardando sorteio"}
             </h2>
             {s.selecaoAtual && (
               <Button
                 variant="outline" size="sm"
+                className="h-6 px-2 text-[9px]"
                 disabled={s.rerollsRestantes <= 0 || !!pendente}
                 onClick={() => { s.usarReroll(); toast.info(`Reroll usado. Restam ${s.rerollsRestantes - 1}.`); }}
               >
-                <Dices className="size-3.5 mr-1" /> {s.rerollsRestantes}
+                <Dices className="size-2.5 mr-1" /> Reroll
               </Button>
             )}
           </div>
 
           {!s.selecaoAtual && !pendente && (
-            <div className="rounded-xl border-2 border-dashed border-primary/40 p-5 text-center">
-              <Shuffle className="mx-auto size-8 text-primary mb-2" />
-              <p className="text-xs text-muted-foreground mb-3">
+            <div className="rounded-lg border-2 border-dashed border-primary/40 p-4 text-center space-y-2">
+              <Shuffle className="mx-auto size-6 text-primary" />
+              <p className="text-[10px] text-muted-foreground">
                 Faltam <span className="font-bold text-foreground">{11 - s.escalacao.length}</span> jogadores.
               </p>
               <Button
                 onClick={() => s.sortearProxima()}
-                className="h-10 w-full font-display uppercase italic tracking-widest font-black"
+                className="h-8 w-full font-display uppercase italic tracking-widest font-black text-[10px]"
               >
-                <Shuffle className="size-4 mr-2" /> Sortear seleção
+                <Shuffle className="size-3 mr-1.5" /> Sortear seleção
               </Button>
+              {s.escalacao.length === 0 && (
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    s.sortearAleatorio();
+                    toast.success("11 jogadores sorteados aleatoriamente!");
+                  }}
+                  className="h-8 w-full font-display uppercase italic tracking-widest font-black text-[10px]"
+                >
+                  <Zap className="size-3 mr-1.5" /> Sortear 11 aleatórios
+                </Button>
+              )}
             </div>
           )}
 
           {s.selecaoAtual && (
-            <div className="space-y-3 animate-enter">
-              <h3 className="font-display text-sm italic uppercase tracking-tight text-center">
-                <FlagEmoji emoji={s.selecaoAtual.bandeira} size={18} /> {s.selecaoAtual.nome} {s.selecaoAtual.ano}
-              </h3>
-              <ul className="space-y-1.5 max-h-[28rem] overflow-y-auto pr-1">
+            <div className="space-y-2 animate-enter">
+              <div className="flex items-center gap-1.5 px-1">
+                <FlagEmoji emoji={s.selecaoAtual.bandeira} size={14} />
+                <h3 className="font-display text-[11px] italic uppercase tracking-tight truncate">
+                  {s.selecaoAtual.nome} {s.selecaoAtual.ano}
+                </h3>
+              </div>
+              <ul className="space-y-1 max-h-[360px] overflow-y-auto pr-0.5">
                 {s.selecaoAtual.jogadores.map(j => {
                   const jaEscalado = s.nomesJaEscolhidos.includes(j.nome);
                   const compativel = !jaEscalado && posicoesCompativeis(j.posicao).some(p => posicoesLivres.has(p));
                   const ehPendente = pendente?.nome === j.nome;
+                  const cor = esconderRaridade ? "border-muted-foreground/40" : RARIDADE_BORDER_CLASS[j.raridade];
+                  const textoCor = esconderRaridade ? "text-muted-foreground" : RARIDADE_TEXT_CLASS[j.raridade];
                   return (
                     <li key={j.numero + j.nome} className="relative">
-                      <PlayerCard
-                        jogador={j}
-                        esconderForca={esconderForca}
-                        esconderRaridade={esconderRaridade}
-                        disabled={!compativel}
-                        selecionado={ehPendente}
-                        variant="list"
+                      <button
                         onClick={() => {
-                          if (jaEscalado) {
-                            toast.error(`${j.nome} já está escalado no seu time.`);
-                            return;
-                          }
-                          if (!compativel) {
-                            toast.error(`Não há slot livre para ${j.posicao}`);
-                            return;
-                          }
-                          if (ehPendente) {
-                            // Clicar de novo no jogador já selecionado cancela a escolha.
-                            s.cancelarPendente();
-                            return;
-                          }
-                          // Troca direto para o jogador clicado, mesmo com outro pendente.
+                          if (jaEscalado) { toast.error(`${j.nome} já está escalado.`); return; }
+                          if (!compativel) { toast.error(`Sem slot para ${j.posicao}`); return; }
+                          if (ehPendente) { s.cancelarPendente(); return; }
                           s.escolherJogador(j);
                         }}
-                      />
+                        disabled={!compativel && !jaEscalado}
+                        className={cn(
+                          "flex w-full items-center gap-1.5 rounded border-l-2 bg-card py-1 pl-2 pr-1.5 text-left transition-all",
+                          cor,
+                          compativel && !jaEscalado && "hover:bg-secondary/60 active:scale-[0.98]",
+                          ehPendente && "ring-1 ring-primary bg-primary/5",
+                          (!compativel || jaEscalado) && "opacity-45",
+                        )}
+                      >
+                        <span className="text-[9px] font-bold text-muted-foreground w-5 text-center shrink-0">#{j.numero}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-bold text-[10px] leading-tight truncate">{j.nome}</div>
+                          <div className={cn("text-[8px] font-bold uppercase tracking-widest", textoCor)}>
+                            {j.posicao}{!esconderRaridade && ` · ${RARIDADE_LABEL[j.raridade]}`}
+                          </div>
+                        </div>
+                        {!esconderForca && (
+                          <span className="font-display text-sm font-black shrink-0">{j.forca}</span>
+                        )}
+                      </button>
                       {jaEscalado && (
-                        <div className="absolute inset-0 flex items-center justify-center gap-1.5 rounded-lg bg-card/85 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                          <Lock className="size-3.5" /> Já escalado
+                        <div className="absolute inset-0 flex items-center justify-center gap-1 rounded text-[9px] font-bold uppercase tracking-widest text-muted-foreground bg-card/80">
+                          <Lock className="size-2.5" /> Escalado
                         </div>
                       )}
                     </li>
                   );
                 })}
               </ul>
-              <div className="text-center text-[9px] text-muted-foreground uppercase tracking-widest">
-                Livres: <span className="text-primary font-bold">{[...posicoesLivres].join(" · ")}</span>
+              <div className="text-center text-[8px] text-muted-foreground uppercase tracking-widest pt-1">
+                Slots livres: <span className="text-primary font-bold">{[...posicoesLivres].join(" · ")}</span>
               </div>
             </div>
           )}
 
-          {pendente && (
-            <div className="mt-2 flex items-center justify-between rounded-lg border border-primary/40 bg-primary/10 p-2 text-xs">
-              <button
-                className="text-left hover:underline"
-                onClick={() => s.cancelarPendente()}
-                title="Clique para cancelar a seleção"
-              >
-                Pendente: <span className="font-bold text-foreground">{pendente.nome}</span>{" "}
-                <span className="text-primary">({pendente.posicao})</span>
-              </button>
-              <button className="text-destructive underline shrink-0 ml-2" onClick={() => s.cancelarPendente()}>
-                cancelar
-              </button>
+          {pendente && !s.selecaoAtual && (
+            <div className="mt-2 flex items-center justify-between rounded-lg border border-primary/40 bg-primary/10 p-2 text-[10px]">
+              <span>Pendente: <span className="font-bold">{pendente.nome}</span> <span className="text-primary">({pendente.posicao})</span></span>
+              <button className="text-destructive underline ml-2 text-[9px]" onClick={() => s.cancelarPendente()}>cancelar</button>
             </div>
           )}
-        </aside>
+        </div>
 
-        {/* CAMPO */}
-        <div className="rounded-2xl border border-border bg-card p-3 order-1 md:order-2">
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="text-xs uppercase tracking-widest text-muted-foreground">Seu time</h2>
-            <span className="text-[10px] uppercase tracking-widest text-primary">{formacao.nome}</span>
+        {/* COL 2: CAMPO — centro */}
+        <div className="flex flex-col items-center">
+          <div className="rounded-xl border border-border bg-card p-2">
+            <div className="flex items-center justify-between mb-1.5 px-1">
+              <span className="text-[9px] uppercase tracking-widest text-muted-foreground">Seu time</span>
+              <span className="text-[9px] uppercase tracking-widest text-primary">{formacao.nome}</span>
+            </div>
+            <MiniCampo
+              formacao={formacao}
+              escalacao={s.escalacao}
+              posicaoAlvo={pendente?.posicao}
+              esconderRaridade={esconderRaridade}
+              onSlotClick={pendente ? (slotId) => {
+                const ok = s.posicionarEm(slotId);
+                if (ok) toast.success(`${pendente.nome} escalado!`);
+              } : undefined}
+              onJogadorClick={!pendente ? (slotId) => setSlotParaExcluir(slotId) : undefined}
+            />
+            <p className="mt-1.5 text-center text-[8px] text-muted-foreground uppercase tracking-widest">
+              Toque para trocar
+            </p>
           </div>
-          <MiniCampo
-            formacao={formacao}
-            escalacao={s.escalacao}
-            posicaoAlvo={pendente?.posicao}
-            esconderRaridade={esconderRaridade}
-            onSlotClick={pendente ? (slotId) => {
-              const ok = s.posicionarEm(slotId);
-              if (ok) toast.success(`${pendente.nome} escalado!`);
-            } : undefined}
-            onJogadorClick={!pendente ? (slotId) => setSlotParaExcluir(slotId) : undefined}
-          />
-          <p className="mt-2 text-center text-[9px] text-muted-foreground uppercase tracking-widest">
-            Toque em um jogador escalado para trocar
-          </p>
+        </div>
+
+        {/* COL 3: Escalação atual */}
+        <div className="rounded-xl border border-border bg-card p-2.5">
+          <h2 className="text-[9px] uppercase tracking-widest text-muted-foreground font-bold mb-2">Escalação atual</h2>
+          <ul className="space-y-1">
+            {slotsOrdenados.map(slot => {
+              const j = ocupados.get(slot.id);
+              return (
+                <li
+                  key={slot.id}
+                  onClick={j ? () => setSlotParaExcluir(slot.id) : undefined}
+                  className={cn(
+                    "flex items-center gap-1.5 rounded border-l-2 px-2 py-1 text-[10px] transition-all",
+                    j
+                      ? (esconderRaridade ? "border-muted-foreground/40 bg-secondary/60" : `${RARIDADE_BORDER_CLASS[j.raridade]} bg-secondary/60`) + " cursor-pointer hover:opacity-80"
+                      : "border-border/40 border-dashed text-muted-foreground",
+                  )}
+                >
+                  <span className="w-7 shrink-0 text-[9px] font-bold uppercase tracking-widest text-primary">{slot.label}</span>
+                  {j ? (
+                    <>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-bold truncate text-[10px] leading-tight">{j.nome}</div>
+                        {!esconderRaridade && (
+                          <div className={cn("text-[8px] font-bold uppercase tracking-widest", RARIDADE_TEXT_CLASS[j.raridade])}>
+                            {RARIDADE_LABEL[j.raridade]}
+                          </div>
+                        )}
+                      </div>
+                      {!esconderForca && <span className="font-display text-xs font-black shrink-0">{j.forca}</span>}
+                      <Trash2 className="size-3 text-muted-foreground shrink-0" />
+                    </>
+                  ) : (
+                    <span className="flex-1 italic text-[9px]">vazio</span>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
         </div>
       </div>
-
-      {/* LISTAGEM DOS JOGADORES JÁ ESCALADOS — abaixo */}
-      <section className="rounded-2xl border border-border bg-card p-3">
-        <h2 className="text-xs uppercase tracking-widest text-muted-foreground mb-2">Escalação atual</h2>
-        <ul className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-          {slotsOrdenados.map(slot => {
-            const j = ocupados.get(slot.id);
-            return (
-              <li
-                key={slot.id}
-                onClick={j ? () => setSlotParaExcluir(slot.id) : undefined}
-                className={cn(
-                  "flex items-center gap-2 rounded-md border px-2 py-1.5 text-xs",
-                  j
-                    ? (esconderRaridade ? "border-muted-foreground/40" : `border-rarity-${RARIDADE_CSS[j.raridade]}`) + " bg-secondary cursor-pointer hover:opacity-80"
-                    : "border-dashed border-border/50 text-muted-foreground",
-                )}
-              >
-                <span className="w-10 shrink-0 text-[10px] font-bold uppercase tracking-widest text-primary">
-                  {slot.label}
-                </span>
-                {j ? (
-                  <>
-                    <span className="flex-1 truncate font-bold">{j.nome}</span>
-                    {!esconderRaridade && (
-                      <span className={cn("text-[8px] font-bold uppercase tracking-widest", `rarity-${RARIDADE_CSS[j.raridade]}`)}>
-                        {j.raridade}
-                      </span>
-                    )}
-                    {!esconderForca && (
-                      <span className="font-display text-sm font-black">{j.forca}</span>
-                    )}
-                    <Trash2 className="size-3.5 text-muted-foreground shrink-0" />
-                  </>
-                ) : (
-                  <span className="flex-1 italic">vazio</span>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-      </section>
 
       {/* MODAL de confirmação de exclusão */}
       {jogadorParaExcluir && (
@@ -325,15 +317,13 @@ function Draft() {
               </button>
             </div>
             <p className="text-sm text-muted-foreground mb-1">
-              Remover <span className="font-bold text-foreground">{jogadorParaExcluir.nome}</span> ({jogadorParaExcluir.posicao}) e escolher outro jogador para esse slot?
+              Remover <span className="font-bold text-foreground">{jogadorParaExcluir.nome}</span> ({jogadorParaExcluir.posicao}) e escolher outro?
             </p>
             <p className="text-xs text-muted-foreground mb-4">
-              Trocas restantes: <span className="font-bold text-primary">{s.trocasRestantes}</span> de {limiteTrocas} · O reroll não é afetado.
+              Trocas restantes: <span className="font-bold text-primary">{s.trocasRestantes}</span> de {limiteTrocas}
             </p>
             <div className="flex gap-2">
-              <Button variant="outline" className="flex-1" onClick={() => setSlotParaExcluir(null)}>
-                Cancelar
-              </Button>
+              <Button variant="outline" className="flex-1" onClick={() => setSlotParaExcluir(null)}>Cancelar</Button>
               <Button
                 variant="destructive"
                 className="flex-1"
@@ -350,13 +340,13 @@ function Draft() {
   );
 }
 
-function StatBadge({ icon, label, value }: { icon: ReactNode; label: string; value: number }) {
+function MiniStat({ icon, label, value }: { icon: ReactNode; label: string; value: number | string }) {
   return (
     <div className="flex flex-col items-center">
-      <div className="flex items-center gap-1 text-[9px] uppercase tracking-widest text-muted-foreground">
+      <div className="flex items-center gap-0.5 text-[8px] uppercase tracking-widest text-muted-foreground">
         {icon}{label}
       </div>
-      <div className="font-display text-lg font-black leading-none">{value || "—"}</div>
+      <div className="font-display text-sm font-black leading-none">{value || "—"}</div>
     </div>
   );
 }

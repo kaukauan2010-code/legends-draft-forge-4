@@ -8,10 +8,10 @@ interface Props {
   formacao: Formacao;
   escalacao: JogadorEscalado[];
   slotAtivo?: string;
-  posicaoAlvo?: Posicao;            // destaca todos os slots vazios dessa posição
+  posicaoAlvo?: Posicao;
   onSlotClick?: (slotId: string) => void;
-  onJogadorClick?: (slotId: string) => void; // clique num jogador já escalado (ex: excluir)
-  esconderRaridade?: boolean;       // modo almanaque: cor neutra até finalizar a escalação
+  onJogadorClick?: (slotId: string) => void;
+  esconderRaridade?: boolean;
 }
 
 const corRaridade: Record<string, string> = {
@@ -25,21 +25,23 @@ const CINZA_NEUTRO = "bg-slate-700/80 border-slate-400";
 export function MiniCampo({ formacao, escalacao, slotAtivo, posicaoAlvo, onSlotClick, onJogadorClick, esconderRaridade }: Props) {
   const ocupados = new Map(escalacao.map(j => [j.slotId, j]));
   return (
-    // campo mais compacto: aspect-[3/4] → aspect-[4/5], max-width menor
-    <div className="relative aspect-[4/5] w-full max-w-[220px] mx-auto overflow-hidden rounded-lg border-2 border-white/10 shadow-inner"
-         style={{ background: "linear-gradient(to bottom, var(--color-pitch) 0%, var(--color-pitch-dark) 100%)" }}>
-      {/* linhas */}
-      <div className="pointer-events-none absolute inset-1.5 rounded border border-white/25" />
-      <div className="absolute inset-x-1.5 top-1/2 h-px bg-white/25" />
-      <div className="absolute left-1/2 top-1/2 size-12 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/25" />
-      {/* áreas */}
-      <div className="absolute left-1/2 top-1.5 h-6 w-2/5 -translate-x-1/2 border-x border-b border-white/25" />
-      <div className="absolute left-1/2 bottom-1.5 h-6 w-2/5 -translate-x-1/2 border-x border-t border-white/25" />
+    <div
+      className="relative w-full overflow-hidden rounded-lg border-2 border-white/10 shadow-inner"
+      style={{
+        background: "linear-gradient(to bottom, var(--color-pitch) 0%, var(--color-pitch-dark) 100%)",
+        aspectRatio: "3/4",
+      }}
+    >
+      {/* linhas do campo */}
+      <div className="pointer-events-none absolute inset-1.5 rounded border border-white/20" />
+      <div className="absolute inset-x-1.5 top-1/2 h-px bg-white/20" />
+      <div className="absolute left-1/2 top-1/2 size-10 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/20" />
+      <div className="absolute left-1/2 top-1.5 h-5 w-2/5 -translate-x-1/2 border-x border-b border-white/20" />
+      <div className="absolute left-1/2 bottom-1.5 h-5 w-2/5 -translate-x-1/2 border-x border-t border-white/20" />
 
       {formacao.slots.map(s => {
         const j = ocupados.get(s.id);
         const alvo = !j && !!posicaoAlvo && posicoesCompativeis(posicaoAlvo).includes(s.posicao);
-        const ativo = slotAtivo === s.id;
         const clicavelVazio = alvo && !!onSlotClick;
         const clicavelOcupado = !!j && !!onJogadorClick;
         const clicavel = clicavelVazio || clicavelOcupado;
@@ -55,27 +57,23 @@ export function MiniCampo({ formacao, escalacao, slotAtivo, posicaoAlvo, onSlotC
             tabIndex={clicavel ? 0 : undefined}
             onClick={handleClick}
             onKeyDown={clicavel ? (e) => { if (e.key === "Enter" || e.key === " ") handleClick?.(); } : undefined}
-            className={cn(
-              "absolute -translate-x-1/2 -translate-y-1/2",
-              clicavel && "cursor-pointer",
-            )}
+            className={cn("absolute -translate-x-1/2 -translate-y-1/2", clicavel && "cursor-pointer")}
             style={{ left: `${s.x}%`, top: `${s.y}%` }}
           >
             <div className="flex flex-col items-center gap-0">
               <div
                 className={cn(
-                  "grid place-items-center rounded-full border-2 text-[9px] font-bold transition-all",
+                  "grid place-items-center rounded-full border-2 font-bold transition-all",
                   j ? (esconderRaridade ? CINZA_NEUTRO : corRaridade[j.raridade]) : "bg-slate-950/70 border-white/40",
-                  j ? "size-7 text-white" : "size-6 text-white/70",
-                  ativo && !j && "ring-2 ring-primary ring-offset-1 ring-offset-pitch animate-pulse",
+                  j ? "size-6 text-[8px] text-white" : "size-5 text-[7px] text-white/70",
                   alvo && "ring-2 ring-primary scale-125 bg-primary/40 border-primary animate-pulse cursor-pointer",
                 )}
               >
                 {j ? j.numero : s.label}
               </div>
               {j && (
-                <span className="max-w-[44px] truncate rounded bg-slate-950/80 px-0.5 py-0 text-center text-[6px] font-bold uppercase leading-tight text-white shadow">
-                  {j.nome.split(" ").slice(-1)[0]}
+                <span className="max-w-[36px] truncate rounded bg-slate-950/80 px-0.5 text-center text-[6px] font-bold uppercase leading-tight text-white shadow">
+                  {j.nome.split(" ").pop()}
                 </span>
               )}
             </div>

@@ -30,43 +30,50 @@ function Jogar() {
   };
 
   return (
-    <div className="mx-auto max-w-md px-4 py-6 space-y-6 animate-enter">
+    <div className="mx-auto max-w-md px-4 py-4 space-y-4 animate-enter">
       <header>
-        <h1 className="font-display text-3xl uppercase italic tracking-tight">Configurar Partida</h1>
-        <p className="text-sm text-muted-foreground">Defina como sua campanha vai começar.</p>
+        <h1 className="font-display text-2xl uppercase italic tracking-tight">Configurar Partida</h1>
+        <p className="text-xs text-muted-foreground">Defina como sua campanha vai começar.</p>
       </header>
 
-      <section className="space-y-3">
-        <div className="flex items-end justify-between">
-          <h2 className="font-display uppercase tracking-tight text-lg">Formação Tática</h2>
-          <span className="text-[10px] uppercase tracking-widest text-primary">{formacaoId}</span>
+      {/* Formação + campo lado a lado */}
+      <section>
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="font-display uppercase tracking-tight text-sm font-bold">Formação Tática</h2>
+          <span className="text-[10px] uppercase tracking-widest text-primary font-bold">{formacaoId}</span>
         </div>
-        <MiniCampo formacao={FORMACOES[formacaoId]} escalacao={[]} />
-        <div className="grid grid-cols-3 gap-2">
-          {LISTA_FORMACOES.map(f => (
-            <button
-              key={f.id}
-              onClick={() => setFormacaoId(f.id)}
-              className={cn(
-                "rounded-lg border py-3 font-display font-bold uppercase tracking-widest text-xs transition-all",
-                formacaoId === f.id ? "border-primary bg-primary text-primary-foreground" : "border-border bg-secondary text-muted-foreground",
-              )}
-            >
-              {f.nome}
-            </button>
-          ))}
+        <div className="flex gap-3 items-start">
+          {/* Grade de botões de formação */}
+          <div className="grid grid-cols-2 gap-1.5 flex-1">
+            {LISTA_FORMACOES.map(f => (
+              <button
+                key={f.id}
+                onClick={() => setFormacaoId(f.id)}
+                className={cn(
+                  "rounded-md border py-1.5 font-display font-bold uppercase tracking-widest text-[10px] transition-all",
+                  formacaoId === f.id ? "border-primary bg-primary text-primary-foreground" : "border-border bg-secondary text-muted-foreground",
+                )}
+              >
+                {f.nome}
+              </button>
+            ))}
+          </div>
+          {/* Mini campo menor */}
+          <div className="shrink-0 w-[100px]">
+            <MiniCampo formacao={FORMACOES[formacaoId]} escalacao={[]} />
+          </div>
         </div>
       </section>
 
-      <section className="space-y-2">
-        <h2 className="font-display uppercase tracking-tight text-lg">Estratégia</h2>
-        <div className="grid grid-cols-3 gap-2">
+      <section className="space-y-1.5">
+        <h2 className="font-display uppercase tracking-tight text-sm font-bold">Estratégia</h2>
+        <div className="grid grid-cols-3 gap-1.5">
           {(["defensiva", "equilibrada", "ofensiva"] as Estrategia[]).map(e => (
             <button
               key={e}
               onClick={() => setEstrategia(e)}
               className={cn(
-                "rounded-lg border py-3 font-bold uppercase text-[10px] tracking-widest",
+                "rounded-md border py-2 font-bold uppercase text-[9px] tracking-widest",
                 estrategia === e ? "border-primary bg-primary text-primary-foreground" : "border-border bg-secondary text-muted-foreground",
               )}
             >
@@ -76,36 +83,43 @@ function Jogar() {
         </div>
       </section>
 
-      <section className="space-y-2">
-        <h2 className="font-display uppercase tracking-tight text-lg">Modo de Jogo</h2>
-        <button
-          onClick={() => setModo("classico")}
-          className={cn(
-            "w-full rounded-xl border p-4 text-left transition-all",
-            modo === "classico" ? "border-primary bg-primary/10" : "border-border bg-card",
-          )}
-        >
-          <div className="font-display uppercase font-bold tracking-tight">Clássico</div>
-          <p className="text-xs text-muted-foreground mt-1">Forças visíveis. 3 rerolls e 3 trocas por campanha.</p>
-        </button>
-        <button
-          onClick={() => setModo("almanaque")}
-          className={cn(
-            "w-full rounded-xl border p-4 text-left transition-all",
-            modo === "almanaque" ? "border-legendary bg-legendary/10" : "border-border bg-card",
-          )}
-        >
-          <div className="font-display uppercase font-bold tracking-tight text-legendary">Almanaque</div>
-          <p className="text-xs text-muted-foreground mt-1">Forças escondidas. 1 reroll e 1 troca. Para quem manja.</p>
-        </button>
-      </section>
-
       <section className="space-y-1.5">
-        <Label>Nome do seu time</Label>
-        <Input value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex: Lendas FC" />
+        <h2 className="font-display uppercase tracking-tight text-sm font-bold">Modo de Jogo</h2>
+        <div className="grid grid-cols-2 gap-1.5">
+          <button
+            onClick={() => setModo("classico")}
+            className={cn(
+              "rounded-lg border p-3 text-left transition-all",
+              modo === "classico" ? "border-primary bg-primary/10" : "border-border bg-card",
+            )}
+          >
+            <div className="font-display uppercase font-bold tracking-tight text-xs">Clássico</div>
+            <p className="text-[9px] text-muted-foreground mt-0.5">Forças visíveis. 3 rerolls e 3 trocas.</p>
+          </button>
+          <button
+            onClick={() => setModo("almanaque")}
+            className={cn(
+              "rounded-lg border p-3 text-left transition-all",
+              modo === "almanaque" ? "border-legendary bg-legendary/10" : "border-border bg-card",
+            )}
+          >
+            <div className="font-display uppercase font-bold tracking-tight text-xs text-legendary">Almanaque</div>
+            <p className="text-[9px] text-muted-foreground mt-0.5">Forças ocultas. 1 reroll e 1 troca.</p>
+          </button>
+        </div>
       </section>
 
-      <Button onClick={comecar} className="w-full h-12 font-display uppercase italic tracking-widest text-base font-black">
+      <section className="space-y-1">
+        <Label className="text-xs">Nome do seu time</Label>
+        <Input
+          value={nome}
+          onChange={e => setNome(e.target.value)}
+          placeholder="Ex: Lendas FC"
+          className="h-9 text-sm"
+        />
+      </section>
+
+      <Button onClick={comecar} className="w-full h-11 font-display uppercase italic tracking-widest text-base font-black">
         Começar Draft
       </Button>
     </div>
