@@ -85,36 +85,42 @@ function Torneio() {
   const salvarPartida = useMutation({
     mutationFn: async () => {
       if (!user || !s.config) return;
-      const { error } = await supabase.from("partidas").insert({
+      const st = useCampanha.getState();
+      if (!st.partidaId) return;
+      const { error } = await supabase.from("partidas").upsert({
+        id: st.partidaId,
         user_id: user.id,
         modo: s.config.modo,
         formacao: s.config.formacaoId,
         estrategia: s.config.estrategia,
-        fase_alcancada: s.fase,
+        fase_alcancada: st.fase,
         pontuacao: 0,
-        campeao: s.fase === "campeao",
-        elenco: s.escalacao as any,
-        log: s.historicoJogos as any,
-      });
+        campeao: st.fase === "campeao",
+        elenco: st.escalacao as any,
+        log: st.historicoJogos as any,
+      }, { onConflict: "id" });
       if (error) throw error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["stats"] });
+      qc.invalidateQueries({ queryKey: ["stats-jogador"] });
       qc.invalidateQueries({ queryKey: ["historico"] });
       qc.invalidateQueries({ queryKey: ["campanhas-dashboard"] });
-      useCampanha.getState().setJaFoiSalvo(true);
+      const st = useCampanha.getState();
+      if (st.fase === "campeao" || st.fase === "eliminado") {
+        useCampanha.getState().setJaFoiSalvo(true);
+      }
     },
   });
 
-  // salvar campanha quando termina — usa timestamp do histórico para evitar duplicatas
-  // quando o usuário navega e volta (salvou reseta, mas s.fase e historicoJogos persistem)
+  // Salva (upsert) a campanha após CADA partida para que o histórico mostre
+  // a campanha em progresso e o dashboard reflita as partidas jogadas.
   useEffect(() => {
-    if ((s.fase === "campeao" || s.fase === "eliminado") && !salvou && user) {
-      // Checa se a partida já foi salva consultando o histórico local via flag no store
-      setSalvou(true);
-      salvarPartida.mutate();
-    }
-  }, [s.fase, salvou, user]);
+    if (!user) return;
+    if (s.historicoJogos.length === 0) return;
+    salvarPartida.mutate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [s.historicoJogos.length, s.fase, user]);
 
   // Inicia a contagem regressiva visível antes da próxima partida automática.
   // Substitui o antigo setTimeout silencioso por um setInterval que atualiza
