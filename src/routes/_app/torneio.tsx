@@ -1146,6 +1146,9 @@ function TimePenaltisLista({ nome, bandeira, todas, feitas, alinhamento }: {
       </ul>
     </div>
   );
+}
+
+
 
 function tituloFase(f: string): string {
   return {
