@@ -77,6 +77,7 @@ export interface EstadoCampanha {
   mostrarChaveamento: FaseTorneio | null; // qual fase de mata-mata mostrar o chaveamento antes de jogar
   modoAutomatico: boolean;
   jaFoiSalvo: boolean; // evita re-salvar ao navegar de volta
+  partidaId: string | null; // id da row em `partidas` para upsert incremental
 }
 
 interface CampanhaActions {
