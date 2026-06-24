@@ -117,6 +117,7 @@ function estadoInicial(): EstadoCampanha {
     mostrarApresentacaoGrupos: false, mostrarChaveamento: null,
     modoAutomatico: false,
     jaFoiSalvo: false,
+    partidaId: null,
   };
 }
 
