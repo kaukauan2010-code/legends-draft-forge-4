@@ -32,6 +32,8 @@ function Dashboard() {
   const { data: campanhas } = useQuery({
     queryKey: ["campanhas-dashboard", user?.id],
     enabled: !!user,
+    staleTime: 0,
+    gcTime: 0,
     queryFn: async () => {
       const { data } = await supabase
         .from("partidas")
@@ -39,6 +41,21 @@ function Dashboard() {
         .eq("user_id", user!.id)
         .order("created_at", { ascending: false });
       return data ?? [];
+    },
+  });
+
+  // Busca direta do total de conquistas desbloqueadas (não depende do hook de estado local)
+  const { data: conquistas_db } = useQuery({
+    queryKey: ["conquistas-count", user?.id],
+    enabled: !!user,
+    staleTime: 0,
+    gcTime: 0,
+    queryFn: async () => {
+      const { count } = await supabase
+        .from("conquistas_desbloqueadas")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", user!.id);
+      return count ?? 0;
     },
   });
 
@@ -93,7 +110,7 @@ function Dashboard() {
         <HudStatCard icon={Flame} label="Vitórias" value={stats.vitorias} accent="purple" onClick={() => setPainelAberto("vitorias")} />
         <HudStatCard icon={Trophy} label="Mundiais" value={stats.titulos} accent="cyan" onClick={() => setPainelAberto("titulos")} />
         <Link to="/conquistas" className="block">
-          <HudStatCard icon={Medal} label="Conquistas" value={`${totalDesbloqueadas}`} suffix={`/${CONQUISTAS.length}`} accent="purple" progress={totalDesbloqueadas / CONQUISTAS.length} />
+          <HudStatCard icon={Medal} label="Conquistas" value={`${conquistas_db ?? totalDesbloqueadas}`} suffix={`/${CONQUISTAS.length}`} accent="purple" progress={(conquistas_db ?? totalDesbloqueadas) / CONQUISTAS.length} />
         </Link>
       </section>
 

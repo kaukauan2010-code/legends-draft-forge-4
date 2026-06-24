@@ -16,6 +16,8 @@ function Historico() {
   const { data: partidas } = useQuery({
     queryKey: ["historico", user?.id],
     enabled: !!user,
+    staleTime: 0,
+    gcTime: 0,
     queryFn: async () => (await supabase.from("partidas").select("*").eq("user_id", user!.id).order("created_at", { ascending: false })).data ?? [],
   });
 

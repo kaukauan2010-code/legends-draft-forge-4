@@ -101,6 +101,7 @@ function Torneio() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["stats"] });
       qc.invalidateQueries({ queryKey: ["historico"] });
+      qc.invalidateQueries({ queryKey: ["campanhas-dashboard"] });
       useCampanha.getState().setJaFoiSalvo(true);
     },
   });
@@ -377,41 +378,50 @@ function Torneio() {
   // --- APRESENTAÇÃO DOS GRUPOS (antes da fase de grupos começar) ---
   if (s.mostrarApresentacaoGrupos) {
     return (
-      <div className="mx-auto max-w-md px-4 py-6 space-y-5 pb-28 animate-enter">
+      <div className="mx-auto max-w-3xl px-4 py-6 space-y-5 pb-28 animate-enter">
         <header className="text-center">
           <Users className="mx-auto size-10 text-primary mb-2" />
           <h1 className="font-display text-3xl uppercase italic tracking-tight">Fase de Grupos</h1>
           <p className="text-sm text-muted-foreground mt-1">32 times · 8 grupos · top 2 de cada avança às oitavas</p>
         </header>
 
-        <div className="grid grid-cols-2 gap-2">
-          {s.grupos.map((g, gi) => (
-            <div key={g.nome} className={cn(
-              "rounded-lg border bg-card p-2",
-              gi === s.meuGrupoIndex ? "border-primary" : "border-border",
-            )}>
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="font-display uppercase tracking-tight font-bold text-[11px]">Grupo {g.nome}</span>
-                {gi === s.meuGrupoIndex && (
-                  <span className="text-[8px] uppercase tracking-widest text-primary font-bold">Meu</span>
-                )}
+        <div className="flex gap-4">
+          {/* Grid de grupos (esquerda) */}
+          <div className="flex-1 grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {s.grupos.map((g, gi) => (
+              <div key={g.nome} className={cn(
+                "rounded-lg border bg-card p-2",
+                gi === s.meuGrupoIndex ? "border-primary" : "border-border",
+              )}>
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="font-display uppercase tracking-tight font-bold text-[10px]">Grupo {g.nome}</span>
+                  {gi === s.meuGrupoIndex && (
+                    <span className="text-[7px] uppercase tracking-widest text-primary font-bold">Meu</span>
+                  )}
+                </div>
+                <ul className="space-y-0.5">
+                  {g.times.map((t, i) => (
+                    <li key={i} className={cn(
+                      "flex items-center gap-1 text-[9px] rounded px-1 py-0.5",
+                      !t.time.isCPU && "bg-primary/10 font-bold",
+                    )}>
+                      <FlagEmoji emoji={t.time.bandeira} size={10} />
+                      <span className="truncate flex-1">{t.time.nome}</span>
+                    </li>
+                  ))}
+                </ul>
               </div>
-              <ul className="space-y-0.5">
-                {g.times.map((t, i) => (
-                  <li key={i} className={cn(
-                    "flex items-center gap-1 text-[10px] rounded px-1.5 py-0.5",
-                    !t.time.isCPU && "bg-primary/10 font-bold",
-                  )}>
-                    <FlagEmoji emoji={t.time.bandeira} size={12} />
-                    <span className="truncate flex-1">{t.time.nome}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
+            ))}
+          </div>
+          {/* Minha seleção (direita) */}
+          <div className="w-52 shrink-0 hidden sm:block">
+            <MinhaSelecaoLateral meu={meu} />
+          </div>
         </div>
-
-        <MinhaSelecaoLateral meu={meu} />
+        {/* Minha seleção (mobile: abaixo) */}
+        <div className="sm:hidden">
+          <MinhaSelecaoLateral meu={meu} />
+        </div>
 
         <Button
           onClick={() => {
@@ -438,54 +448,60 @@ function Torneio() {
 
     if (etapaMata === "preview") {
       return (
-        <div className="mx-auto max-w-md px-4 py-6 space-y-5 pb-28 animate-enter">
-          <header className="text-center">
+        <div className="mx-auto max-w-3xl px-4 py-6 pb-28 animate-enter">
+          <header className="text-center mb-5">
             <Trophy className="mx-auto size-10 text-primary mb-2" />
             <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Próxima partida</div>
             <h1 className="font-display text-3xl uppercase italic tracking-tight">{tituloFase(faseChave)}</h1>
           </header>
 
-          <section className="rounded-2xl border border-border bg-card p-5">
-            <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-              <TimeBlock time={meu} />
-              <div className="font-display text-2xl italic text-muted-foreground">VS</div>
-              {advNoConfronto ? (
-                <TimeBlock time={advNoConfronto} />
-              ) : (
-                <div className="text-center min-w-0">
-                  <div className="text-3xl">❔</div>
-                  <div className="font-bold text-sm mt-1 truncate">A definir</div>
+          <div className="flex gap-4 items-start">
+            <div className="flex-1 space-y-4">
+              <section className="rounded-2xl border border-border bg-card p-5">
+                <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+                  <TimeBlock time={meu} />
+                  <div className="font-display text-2xl italic text-muted-foreground">VS</div>
+                  {advNoConfronto ? (
+                    <TimeBlock time={advNoConfronto} />
+                  ) : (
+                    <div className="text-center min-w-0">
+                      <div className="text-3xl">❔</div>
+                      <div className="font-bold text-sm mt-1 truncate">A definir</div>
+                    </div>
+                  )}
                 </div>
-              )}
+              </section>
+
+              <Button
+                onClick={() => setEtapaMata("chave")}
+                className="w-full h-12 font-display uppercase tracking-widest font-black"
+              >
+                <Network className="size-4 mr-1.5" /> Ver chaveamento
+              </Button>
             </div>
-          </section>
-
-          <MinhaSelecaoLateral meu={meu} />
-
-          <Button
-            onClick={() => setEtapaMata("chave")}
-            className="w-full h-12 font-display uppercase tracking-widest font-black"
-          >
-            <Network className="size-4 mr-1.5" /> Ver chaveamento
-          </Button>
+            <div className="w-52 shrink-0 hidden sm:block">
+              <MinhaSelecaoLateral meu={meu} />
+            </div>
+          </div>
+          <div className="sm:hidden mt-4">
+            <MinhaSelecaoLateral meu={meu} />
+          </div>
         </div>
       );
     }
 
     return (
-      <div className="mx-auto max-w-md px-4 py-6 space-y-5 pb-28 animate-enter">
-        <header className="text-center">
+      <div className="mx-auto max-w-3xl px-4 py-6 pb-28 animate-enter">
+        <header className="text-center mb-5">
           <Network className="mx-auto size-10 text-primary mb-2" />
           <h1 className="font-display text-3xl uppercase italic tracking-tight">{tituloFase(faseChave)}</h1>
           <p className="text-sm text-muted-foreground mt-1">Confira o chaveamento até a final</p>
         </header>
 
-        <ChaveamentoVisual chave={s.chave} faseAtual={faseChave} />
-
-        <MinhaSelecaoLateral meu={meu} />
-
-
-        <div className="grid grid-cols-2 gap-2">
+        <div className="flex gap-4 items-start">
+          <div className="flex-1 space-y-4">
+            <ChaveamentoVisual chave={s.chave} faseAtual={faseChave} />
+            <div className="grid grid-cols-2 gap-2">
           <Button
             variant="outline"
             onClick={() => setEtapaMata("preview")}
@@ -502,6 +518,14 @@ function Torneio() {
           >
             <Play className="size-4 mr-1.5" /> Iniciar partida
           </Button>
+            </div>
+          </div>
+          <div className="w-52 shrink-0 hidden sm:block">
+            <MinhaSelecaoLateral meu={meu} />
+          </div>
+        </div>
+        <div className="sm:hidden mt-4">
+          <MinhaSelecaoLateral meu={meu} />
         </div>
       </div>
     );
@@ -847,42 +871,47 @@ function Torneio() {
 
   // --- LOBBY do torneio ---
   return (
-    <div className="mx-auto max-w-md px-4 py-6 space-y-5 pb-10">
+    <div className="mx-auto max-w-3xl px-4 py-6 space-y-5 pb-10">
       <header>
         <h1 className="font-display text-3xl uppercase italic tracking-tight">{tituloFase(s.fase)}</h1>
       </header>
 
-      {s.fase === "grupos" && s.grupos[s.meuGrupoIndex] && (
-        <section className="rounded-xl border border-border bg-card p-3">
-          <h2 className="font-display uppercase text-[10px] tracking-widest text-muted-foreground mb-2">
-            Grupo {s.grupos[s.meuGrupoIndex]!.nome}
-          </h2>
-          <div className="space-y-0.5">
-            {[...s.grupos[s.meuGrupoIndex]!.times]
-              .sort((a, b) => b.pts - a.pts || (b.gp - b.gc) - (a.gp - a.gc))
-              .map((t, i) => (
-                <div key={i} className={cn(
-                  "flex items-center justify-between rounded px-2 py-1 text-[11px]",
-                  !t.time.isCPU && "bg-primary/10 font-bold",
-                  i < 2 && "border-l-2 border-primary",
-                )}>
-                  <span className="flex items-center gap-1.5">
-                    <span className="text-muted-foreground w-3">{i + 1}</span>
-                    <FlagEmoji emoji={t.time.bandeira} size={12} />
-                    <span className="truncate max-w-[110px]">{t.time.nome}</span>
-                  </span>
-                  <span className="font-mono text-[10px] tabular-nums text-muted-foreground">
-                    {t.jogos}j {t.pts}pts {t.gp}:{t.gc}
-                  </span>
+      {/* FASE DE GRUPOS: grid de todos os grupos (igual à tela de apresentação) */}
+      {s.fase === "grupos" && s.grupos.length > 0 && (
+        <section>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+            {s.grupos.map((g, gi) => (
+              <div key={g.nome} className={cn(
+                "rounded-lg border bg-card p-2",
+                gi === s.meuGrupoIndex ? "border-primary" : "border-border",
+              )}>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="font-display uppercase tracking-tight font-bold text-[10px]">Grupo {g.nome}</span>
+                  {gi === s.meuGrupoIndex && (
+                    <span className="text-[7px] uppercase tracking-widest text-primary font-bold">Meu</span>
+                  )}
                 </div>
-              ))}
+                <ul className="space-y-0.5">
+                  {[...g.times].sort((a, b) => b.pts - a.pts || (b.gp - b.gc) - (a.gp - a.gc)).map((t, i) => (
+                    <li key={i} className={cn(
+                      "flex items-center gap-1 text-[9px] rounded px-1 py-0.5",
+                      !t.time.isCPU && gi === s.meuGrupoIndex && "bg-primary/10 font-bold",
+                      i < 2 && "border-l-2 border-primary",
+                    )}>
+                      <span className="text-muted-foreground w-3 shrink-0">{i + 1}</span>
+                      <FlagEmoji emoji={t.time.bandeira} size={10} />
+                      <span className="truncate flex-1">{t.time.nome}</span>
+                      <span className="font-mono tabular-nums text-muted-foreground shrink-0">{t.pts}p</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
           </div>
-          <p className="text-[8px] uppercase tracking-widest text-muted-foreground text-center mt-1.5">
-            Top 2 avançam às oitavas
-          </p>
         </section>
       )}
 
+      {/* Próximo confronto (fases de mata-mata) */}
       {s.fase !== "grupos" && s.proximoConfronto && (
         <section className="rounded-2xl border border-border bg-card p-5">
           <div className="text-[10px] uppercase tracking-widest text-muted-foreground text-center mb-3">Próximo confronto · {tituloFase(s.fase)}</div>
@@ -894,8 +923,9 @@ function Torneio() {
         </section>
       )}
 
+      {/* Stats do meu time */}
       {s.fase === "grupos" && (
-        <section className="rounded-2xl border border-border bg-card p-4">
+        <section className="rounded-xl border border-border bg-card p-3">
           <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-2">Seu time</div>
           <StatsRow time={meu} />
         </section>
