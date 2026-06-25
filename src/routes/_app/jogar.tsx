@@ -36,6 +36,7 @@ function useRedirectSeCampanhaEmAndamento(navigate: ReturnType<typeof useNavigat
 
 function Jogar() {
   const navigate = useNavigate();
+  useRedirectSeCampanhaEmAndamento(navigate);
   const iniciar = useCampanha(s => s.iniciar);
   const [formacaoId, setFormacaoId] = useState<FormacaoId>("4-3-3");
   const [estrategia, setEstrategia] = useState<Estrategia>("equilibrada");
