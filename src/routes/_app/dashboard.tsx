@@ -128,7 +128,7 @@ function Dashboard() {
         <HudStatCard icon={Flame} label="Vitórias" value={stats.vitorias} accent="purple" onClick={() => setPainelAberto("vitorias")} />
         <HudStatCard icon={Trophy} label="Mundiais" value={stats.titulos} accent="cyan" onClick={() => setPainelAberto("titulos")} />
         <Link to="/conquistas" className="block">
-          <HudStatCard icon={Medal} label="Conquistas" value={`${conquistas_db ?? totalDesbloqueadas}`} suffix={`/${CONQUISTAS.length}`} accent="purple" progress={(conquistas_db ?? totalDesbloqueadas) / CONQUISTAS.length} />
+          <HudStatCard icon={Medal} label="Conquistas" value={`${conquistas_db !== undefined ? conquistas_db : totalDesbloqueadas}`} suffix={`/${CONQUISTAS.length}`} accent="purple" progress={(conquistas_db !== undefined ? conquistas_db : totalDesbloqueadas) / CONQUISTAS.length} />
         </Link>
       </section>
 
