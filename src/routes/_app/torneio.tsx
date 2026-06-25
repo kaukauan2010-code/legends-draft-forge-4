@@ -1243,7 +1243,7 @@ function TimeEscalacao({ time, titulo }: { time: Time; titulo: string }) {
                 <span className={cn("font-bold", RARIDADE_TEXT_CLASS[j.raridade])}>{RARIDADE_LABEL[j.raridade]}</span>
               </div>
             </div>
-            <span className="font-display text-xs font-black tabular-nums">{j.forcaEfetiva}</span>
+            <span className="font-display text-xs font-black tabular-nums">{j.forca}</span>
           </li>
         ))}
       </ul>
