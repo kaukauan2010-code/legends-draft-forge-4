@@ -136,6 +136,53 @@ function Torneio() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [s.historicoJogos.length, s.fase, user]);
 
+  // Registra estatísticas/conquistas para QUALQUER partida nova no histórico
+  // que ainda não tenha sido registrada — incluindo partidas que terminaram
+  // enquanto o usuário estava em outra tela (navegou pra conquistas, voltou).
+  // O índice "ultimo registrado" fica em localStorage chaveado pelo partidaId
+  // da campanha — sem isso, partidas terminadas durante navegação sumiam.
+  useEffect(() => {
+    if (!user) return;
+    const st = useCampanha.getState();
+    if (!st.partidaId || !st.config) return;
+    const total = st.historicoJogos.length;
+    if (total === 0) return;
+    const chave = `wcd-stats-${st.partidaId}`;
+    const ultimoStr = typeof window !== "undefined" ? localStorage.getItem(chave) : null;
+    const ultimo = ultimoStr ? Number(ultimoStr) : 0;
+    if (ultimo >= total) return;
+    const pendentes = st.historicoJogos.slice(ultimo);
+    (async () => {
+      for (let i = 0; i < pendentes.length; i++) {
+        const h = pendentes[i]!;
+        const empate = h.empate ?? false;
+        const venceu = !empate && h.minhaVitoria;
+        const idxGlobal = ultimo + i;
+        const ultimaDoConjunto = idxGlobal === total - 1;
+        const encerrou = ultimaDoConjunto && (st.fase === "campeao" || st.fase === "eliminado");
+        const lend = st.escalacao.filter(j => j.raridade === "lendario").length;
+        const improv = st.escalacao.filter(j => j.improvisado).length;
+        try {
+          const novas = await registrarPartida({
+            vitoria: venceu, empate,
+            golsMeu: h.resultado.golsCasa, golsAdv: h.resultado.golsFora,
+            formacaoId: st.config!.formacaoId, selecoesUsadas: st.selecoesUsadas,
+            jogadoresLendariosEscalados: lend, improvisados: improv,
+            foiPenaltis: !!h.penaltis, venceuPenaltis: h.penaltis ? venceu : undefined,
+            campanhaEncerrada: encerrou, campeao: encerrou && st.fase === "campeao",
+            modo: st.config!.modo,
+            trocasUsadasNestaCompanha: encerrou ? (st.config!.modo === "classico" ? 3 : 1) - st.trocasRestantes : undefined,
+          });
+          novas.forEach(c => toast.success(`🏆 Conquista desbloqueada: ${c.nome}`, { duration: 4000 }));
+        } catch (e) {
+          console.error("[torneio] erro registrando partida", e);
+        }
+      }
+      if (typeof window !== "undefined") localStorage.setItem(chave, String(total));
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [s.historicoJogos.length, s.fase, user]);
+
   // Inicia a contagem regressiva visível antes da próxima partida automática.
   // Substitui o antigo setTimeout silencioso por um setInterval que atualiza
   // contagemAuto a cada segundo, permitindo mostrar a barra de progresso.
