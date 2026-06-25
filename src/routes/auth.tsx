@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable/index";
@@ -15,16 +15,47 @@ export const Route = createFileRoute("/auth")({
 });
 
 function AuthPage() {
-  const { user, loading } = useAuth();
+  const { user, loading, isAnonymous } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
   const [nome, setNome] = useState("");
   const [busy, setBusy] = useState(false);
+  // Quando o usuário acabou de clicar em "Entrar como visitante" nesta tela,
+  // NÃO devemos deslogar a sessão anônima recém-criada — precisamos navegar.
+  const acabouDeEntrarComoVisitante = useRef(false);
 
+  // Se o usuário chegou aqui já tendo uma sessão anônima ANTERIOR (ex: voltou
+  // pra cá pra fazer login/cadastrar de verdade), aí sim encerramos a anônima.
   useEffect(() => {
-    if (!loading && user) navigate({ to: "/dashboard", replace: true });
-  }, [user, loading, navigate]);
+    if (loading) return;
+    if (acabouDeEntrarComoVisitante.current) {
+      // sessão anônima criada agora mesmo — só navega.
+      acabouDeEntrarComoVisitante.current = false;
+      navigate({ to: "/dashboard", replace: true });
+      return;
+    }
+    if (user && isAnonymous) {
+      try { localStorage.removeItem("wcd_visitante"); } catch {}
+      supabase.auth.signOut();
+      return;
+    }
+    if (user) navigate({ to: "/dashboard", replace: true });
+  }, [user, loading, isAnonymous, navigate]);
+
+  // Detecta retorno de confirmação de email (link do email cai aqui com ?confirmed=1)
+  // ou hash do supabase (#access_token / type=signup) e mostra um toast amigável
+  // pra deixar o usuário fazer login imediatamente sem ir para outra página.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const hash = window.location.hash || "";
+    if (params.get("confirmed") === "1" || hash.includes("type=signup") || hash.includes("type=email_change")) {
+      toast.success("Conta confirmada! Já pode fazer login.");
+      // limpa URL para não repetir o toast
+      window.history.replaceState({}, "", "/auth");
+    }
+  }, []);
 
   const entrar = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,11 +71,13 @@ function AuthPage() {
     setBusy(true);
     const { error } = await supabase.auth.signUp({
       email, password: senha,
-      options: { emailRedirectTo: window.location.origin, data: { full_name: nome } },
+      // Após clicar no link do email, o usuário volta direto pra tela de login
+      // do jogo (com toast de confirmação), em vez de cair em login externo.
+      options: { emailRedirectTo: `${window.location.origin}/auth?confirmed=1`, data: { full_name: nome } },
     });
     setBusy(false);
     if (error) toast.error(error.message);
-    else toast.success("Conta criada! Já pode jogar.");
+    else toast.success("Conta criada! Confirme o email para fazer login.");
   };
 
   const esqueciSenha = async () => {
@@ -79,10 +112,25 @@ function AuthPage() {
         </Button>
 
         <Button
-          onClick={() => {
-            localStorage.setItem("wcd_visitante", "1");
+          onClick={async () => {
+            setBusy(true);
+            // Marca ANTES da chamada pra evitar que o useEffect dispare o
+            // signOut() quando a sessão anônima recém-criada propagar.
+            acabouDeEntrarComoVisitante.current = true;
+            // Cria uma sessão anônima real no backend para que o "visitante"
+            // possa jogar online (criar/entrar em salas) com seu próprio user_id.
+            const { error } = await supabase.auth.signInAnonymously();
+            setBusy(false);
+            if (error) {
+              acabouDeEntrarComoVisitante.current = false;
+              toast.error(`Falha ao entrar como visitante: ${error.message}`);
+              return;
+            }
+            // Mantém o flag local p/ compatibilidade com fluxos antigos.
+            try { localStorage.setItem("wcd_visitante", "1"); } catch {}
             navigate({ to: "/dashboard", replace: true });
           }}
+          disabled={busy}
           variant="secondary"
           className="w-full mb-4 h-11 font-bold uppercase tracking-widest"
         >

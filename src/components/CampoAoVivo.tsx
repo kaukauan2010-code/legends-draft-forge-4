@@ -124,24 +124,26 @@ export function CampoAoVivo({ casa, fora, eventoAtual, cobrancaAtual, modo = "pa
         const ehMeio = p.timeCasa ? p.y >= 28 && p.y < 42 : p.y > 58 && p.y <= 72;
         // Componente direcional (puxa pela bola/papel) + componente aleatório
         // (desmarcação/oscilação). A soma evita movimento mecânico.
-        let pesoX = 0.15, pesoY = 0.15;
+        let pesoX = 0.25, pesoY = 0.25;
         if (posse != null) {
           if (ehMeuTime) {
-            // ataque sobe pra frente da bola; meio gira lateral; defesa fecha
-            pesoX = ehAtacante ? 0.35 : ehMeio ? 0.22 : 0.10;
-            pesoY = ehAtacante ? 0.45 : ehMeio ? 0.28 : 0.12;
+            // ataque sobe em direção ao gol adversário; meio acompanha; defesa apoia
+            pesoX = ehAtacante ? 0.50 : ehMeio ? 0.40 : 0.30;
+            pesoY = ehAtacante ? 0.65 : ehMeio ? 0.50 : 0.35;
           } else {
-            // marcação: defesa recua em bloco, meio fecha espaço
-            pesoX = ehAtacante ? 0.12 : ehMeio ? 0.25 : 0.30;
-            pesoY = ehAtacante ? 0.10 : ehMeio ? 0.30 : 0.38;
+            // marcação ativa: todos perseguem a bola, defesa fecha mais
+            pesoX = ehAtacante ? 0.30 : ehMeio ? 0.45 : 0.55;
+            pesoY = ehAtacante ? 0.35 : ehMeio ? 0.50 : 0.60;
           }
         }
         const dirX = (b.x - p.x) * pesoX;
         const dirY = (b.y - p.y) * pesoY;
-        // ruído de "corrida em diagonal" — magnitude pequena, pra desmarcar
-        const ruidoX = (Math.random() - 0.5) * (ehAtacante ? 8 : 4);
-        const ruidoY = (Math.random() - 0.5) * (ehAtacante ? 6 : 3);
-        const lim = ehAtacante ? 16 : ehMeio ? 12 : 8;
+        // ruído de "corrida em diagonal" — maior pra dar mais vida
+        const ruidoX = (Math.random() - 0.5) * (ehAtacante ? 14 : 9);
+        const ruidoY = (Math.random() - 0.5) * (ehAtacante ? 12 : 7);
+        // Limites generosos: jogadores podem cobrir o campo todo. Atacantes
+        // chegam à grande área adversária, defensores sobem ao meio-campo.
+        const lim = ehAtacante ? 55 : ehMeio ? 45 : 35;
         novos[key] = {
           dx: Math.max(-lim, Math.min(lim, dirX + ruidoX)),
           dy: Math.max(-lim, Math.min(lim, dirY + ruidoY)),
@@ -230,43 +232,41 @@ export function CampoAoVivo({ casa, fora, eventoAtual, cobrancaAtual, modo = "pa
         const t = setTimeout(() => setBola({ x: b.x + (Math.random() - 0.5) * 3, y: b.y + (Math.random() - 0.5) * 3 }), 350);
         animRef.current.push(t);
       } else if (tipoSorte < 0.60) {
-        // passe longo para a frente
-        const origem = meuTime.filter(p => atacaCasa ? p.y > 30 : p.y < 70);
-        const destino = meuTime.filter(p => atacaCasa ? p.y < 35 : p.y > 65);
-        const a = (origem.length ? origem : meuTime)[Math.floor(Math.random() * (origem.length || meuTime.length))]!;
-        const b = (destino.length ? destino : meuTime)[Math.floor(Math.random() * (destino.length || meuTime.length))]!;
+        // passe longo para a frente (em direção ao gol adversário)
+        const a = meuTime[Math.floor(Math.random() * meuTime.length)]!;
+        const xAlvo = 20 + Math.random() * 60;
+        const yAlvo = atacaCasa ? 70 + Math.random() * 18 : 12 + Math.random() * 18;
         setBola({ x: a.x, y: a.y });
-        const t = setTimeout(() => setBola({ x: b.x + (Math.random() - 0.5) * 5, y: b.y }), 500);
+        const t = setTimeout(() => setBola({ x: xAlvo, y: yAlvo }), 500);
         animRef.current.push(t);
       } else if (tipoSorte < 0.72) {
         // cruzamento: ponta lateral pra área adversária
         const lado = Math.random() < 0.5 ? 8 : 92;
-        const yLateral = atacaCasa ? 20 : 80;
-        const yArea = atacaCasa ? 10 : 90;
+        const yLateral = atacaCasa ? 75 : 25;
+        const yArea = atacaCasa ? 88 : 12;
         setBola({ x: lado, y: yLateral });
         const t = setTimeout(() => setBola({ x: 40 + Math.random() * 20, y: yArea }), 450);
         animRef.current.push(t);
       } else if (tipoSorte < 0.80) {
-        // chute a gol (defesa salva ou sai)
-        const atacantes = meuTime.filter(p => atacaCasa ? p.y < 25 : p.y > 75);
-        const bat = atacantes.length ? atacantes[Math.floor(Math.random() * atacantes.length)]! : meuTime[0]!;
-        const yGol = atacaCasa ? 4 : 96;
+        // chute a gol (defesa salva ou sai). Casa chuta para y=96, fora para y=4.
+        const bat = meuTime[Math.floor(Math.random() * meuTime.length)]!;
+        const yGol = atacaCasa ? 96 : 4;
         setBola({ x: bat.x, y: bat.y });
         const t = setTimeout(() => setBola({ x: 42 + Math.random() * 16, y: yGol }), 400);
         animRef.current.push(t);
         const t2 = setTimeout(() => {
-          // goleiro "defende": bola vai para canto ou área
-          setBola({ x: 20 + Math.random() * 60, y: atacaCasa ? 12 : 88 });
+          // goleiro "defende": bola vai para canto ou área adversária
+          setBola({ x: 20 + Math.random() * 60, y: atacaCasa ? 88 : 12 });
         }, 900);
         animRef.current.push(t2);
         const t3 = setTimeout(() => setBola({ x: 50, y: 50 }), 1800);
         animRef.current.push(t3);
       } else if (tipoSorte < 0.88) {
-        // escanteio: bola vai pro canto → cabeceio na área
+        // escanteio: canto do campo adversário → cabeceio na área
         const lado = Math.random() < 0.5 ? 3 : 97;
-        const yLinha = atacaCasa ? 3 : 97;
+        const yLinha = atacaCasa ? 97 : 3;
         setBola({ x: lado, y: yLinha });
-        const t = setTimeout(() => setBola({ x: 45 + Math.random() * 10, y: atacaCasa ? 12 : 88 }), 600);
+        const t = setTimeout(() => setBola({ x: 45 + Math.random() * 10, y: atacaCasa ? 88 : 12 }), 600);
         animRef.current.push(t);
         const t2 = setTimeout(() => setBola({ x: 50, y: 50 }), 1500);
         animRef.current.push(t2);
@@ -317,15 +317,20 @@ export function CampoAoVivo({ casa, fora, eventoAtual, cobrancaAtual, modo = "pa
 
 
     // Escolhe um jogador ofensivo aleatório do time que está com a jogada,
-    // para destacar e usar como "origem" do lance.
-    const candidatos = (atacaCasa ? posCasa : posFora).filter(p => p.y < 60 && p.y > 5);
-    const jogador = candidatos[Math.floor(Math.random() * candidatos.length)] ?? (atacaCasa ? posCasa : posFora)[0]!;
+    // para destacar e usar como "origem" do lance. Casa joga "subindo" (y diminui)
+    // e fora joga "descendo" (y aumenta) — antes este filtro estava errado.
+    const meuTimePos = atacaCasa ? posCasa : posFora;
+    const candidatos = atacaCasa
+      ? meuTimePos.filter(p => p.y < 35)   // atacantes/meias do casa (metade ofensiva no nosso lado)
+      : meuTimePos.filter(p => p.y > 65);  // atacantes/meias do fora
+    const jogador = candidatos[Math.floor(Math.random() * candidatos.length)] ?? meuTimePos[0]!;
     setDestaque(jogador?.id ?? null);
 
-    // Ponto de chegada do lance: gol do time adversário se for "gol", senão
-    // perto da área adversária para "chance", ou posição neutra para o resto.
-    const golAdversarioY = atacaCasa ? 4 : 96;
-    const areaAdversariaY = atacaCasa ? 14 : 86;
+    // Ponto de chegada do lance: gol do ADVERSÁRIO (não o nosso).
+    // Casa é renderizada à ESQUERDA (y baixo); o gol adversário fica à DIREITA (y=96).
+    // Fora é renderizado à DIREITA (y alto); o gol adversário fica à ESQUERDA (y=4).
+    const golAdversarioY = atacaCasa ? 96 : 4;
+    const areaAdversariaY = atacaCasa ? 86 : 14;
     const destinoY = eventoAtual.tipo === "gol" ? golAdversarioY
       : eventoAtual.tipo === "chance" ? areaAdversariaY
       : jogador?.y ?? 50;
@@ -340,6 +345,20 @@ export function CampoAoVivo({ casa, fora, eventoAtual, cobrancaAtual, modo = "pa
       const t2 = setTimeout(() => setBola({ x: 50, y: 50 }), 1400);
       animRef.current.push(t2);
     }
+    // Após um gol, "zera" os alvos de todos os jogadores — eles voltam pra
+    // formação base por alguns instantes antes de retomar a movimentação.
+    if (eventoAtual.tipo === "gol") {
+      const tReset = setTimeout(() => {
+        const zerados: Record<string, { dx: number; dy: number; runUntil: number }> = {};
+        for (const p of todasPosicoes) {
+          const key = `${p.timeCasa ? "c" : "f"}-${p.id}`;
+          zerados[key] = { dx: 0, dy: 0, runUntil: performance.now() + 2500 };
+        }
+        alvosRef.current = zerados;
+        posseRef.current = null;
+      }, 1500);
+      animRef.current.push(tReset);
+    }
 
     return () => { animRef.current.forEach(t => clearTimeout(t)); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -352,9 +371,11 @@ export function CampoAoVivo({ casa, fora, eventoAtual, cobrancaAtual, modo = "pa
     animRef.current = [];
 
     const ehCasa = cobrancaAtual.time === "casa";
-    const golAdversarioY = ehCasa ? 4 : 96;
+    // Mesmo critério da partida ao vivo: gol adversário fica na direção oposta
+    // ao lado do batedor. Casa bate no gol do fora (y=96), fora bate no gol do casa (y=4).
+    const golAdversarioY = ehCasa ? 96 : 4;
     setDestaque(null);
-    setBola({ x: 50, y: ehCasa ? 40 : 60 }); // marca do pênalti (lado de quem bate)
+    setBola({ x: 50, y: ehCasa ? 80 : 20 }); // marca do pênalti (lado de quem bate, no campo adversário)
     const t1 = setTimeout(() => {
       setBola({
         x: cobrancaAtual.acertou ? 42 + Math.random() * 16 : 20 + Math.random() * 60,

@@ -36,34 +36,37 @@ function Jogar() {
         <p className="text-xs text-muted-foreground">Defina como sua campanha vai começar.</p>
       </header>
 
-      {/* Formação + campo lado a lado */}
+      {/* Formação + campo: campo é o protagonista, lista de formações compacta */}
       <section>
         <div className="flex items-center justify-between mb-2">
           <h2 className="font-display uppercase tracking-tight text-sm font-bold">Formação Tática</h2>
           <span className="text-[10px] uppercase tracking-widest text-primary font-bold">{formacaoId}</span>
         </div>
-        <div className="flex gap-3 items-start">
-          {/* Mini campo grande (à esquerda) */}
-          <div className="shrink-0 w-[180px]">
-            <MiniCampo formacao={FORMACOES[formacaoId]} escalacao={[]} />
+        <div className="space-y-2">
+          {/* Campo maior, ocupando largura toda */}
+          <div className="mx-auto w-full max-w-[260px]">
+            <div className="w-full" style={{ aspectRatio: "3/4" }}>
+              <MiniCampo formacao={FORMACOES[formacaoId]} escalacao={[]} fill />
+            </div>
           </div>
-          {/* Lista de formações em coluna estreita */}
-          <div className="grid grid-cols-1 gap-1.5 flex-1">
+          {/* Lista compacta — 3 colunas, botões enxutos */}
+          <div className="grid grid-cols-3 gap-1">
             {LISTA_FORMACOES.map(f => (
               <button
                 key={f.id}
                 onClick={() => setFormacaoId(f.id)}
                 className={cn(
-                  "rounded-md border py-1.5 font-display font-bold uppercase tracking-widest text-[10px] transition-all",
+                  "rounded-md border py-1 font-display font-bold uppercase tracking-tight text-[10px] transition-all",
                   formacaoId === f.id ? "border-primary bg-primary text-primary-foreground" : "border-border bg-secondary text-muted-foreground",
                 )}
               >
-                {f.nome}
+                {f.id}
               </button>
             ))}
           </div>
         </div>
       </section>
+
 
       <section className="space-y-1.5">
         <h2 className="font-display uppercase tracking-tight text-sm font-bold">Estratégia</h2>

@@ -9,25 +9,24 @@ export const Route = createFileRoute("/_app")({
 });
 
 function AppShell() {
-  const { user, loading } = useAuth();
+  const { user, loading, isAnonymous } = useAuth();
   const navigate = useNavigate();
-  const visitante = typeof window !== "undefined" && localStorage.getItem("wcd_visitante") === "1";
 
   useEffect(() => {
-    if (!loading && !user && !visitante) navigate({ to: "/auth", replace: true });
-  }, [user, loading, visitante, navigate]);
+    if (!loading && !user) navigate({ to: "/auth", replace: true });
+  }, [user, loading, navigate]);
 
-  if (loading || (!user && !visitante)) {
+  if (loading || !user) {
     return <div className="grid min-h-screen place-items-center text-muted-foreground">Carregando...</div>;
   }
   return (
     <div className="min-h-screen pb-28">
-      {!user && visitante && (
+      {isAnonymous && (
         <div className="sticky top-0 z-40 border-b border-border bg-card/90 backdrop-blur-xl">
           <div className="mx-auto flex max-w-md items-center justify-between gap-2 px-4 py-2">
             <div className="min-w-0">
               <div className="text-[9px] font-black uppercase tracking-widest text-primary">Modo Visitante</div>
-              <div className="truncate text-[10px] text-muted-foreground">Faça login para salvar progresso, conquistas e jogar online.</div>
+              <div className="truncate text-[10px] text-muted-foreground">Faça login para salvar histórico e conquistas.</div>
             </div>
             <Link
               to="/auth"

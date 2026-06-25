@@ -51,6 +51,12 @@ export interface ConfrontoOnline {
   slot2_id: string;     // slot_id do "fora"
   vencedor_slot_id: string | null;
   partida_online_id: string | null;
+  /** Quando o confronto ficou disponível para os jogadores (ISO timestamp). Início do prazo de 30s. */
+  disponivel_em?: string | null;
+  /** Slot1 já clicou em "estou pronto" (CPU = true automaticamente). */
+  slot1_pronto?: boolean;
+  /** Slot2 já clicou em "estou pronto" (CPU = true automaticamente). */
+  slot2_pronto?: boolean;
 }
 
 /** Linha de classificação em torneio_online.classificacao_grupos */
@@ -62,6 +68,9 @@ interface ClassifLinha {
 }
 
 const NOMES_GRUPOS = ["A", "B", "C", "D", "E", "F", "G", "H"];
+
+/** Prazo (ms) que cada jogador tem para confirmar pronto antes de levar WO. */
+const PRAZO_PRONTO_MS = 30_000;
 
 // ---------- helpers ----------
 
@@ -85,6 +94,22 @@ async function exigirMembro(admin: AdminClient, salaId: string, userId: string) 
     .maybeSingle();
   if (!data || data.is_cpu) throw new Error("Você não é membro humano desta sala.");
   return data as { id: string; is_cpu: boolean };
+}
+
+/** Aplica metadados de "pronto/disponivel" a uma lista de confrontos novos.
+ * Confrontos com pelo menos um lado CPU já marcam aquele lado como pronto.
+ * disponivel_em é setado para agora (início do prazo de 30s). */
+function aplicarMetaConfrontos(
+  confrontos: ConfrontoOnline[],
+  slotsInfo: Map<string, { is_cpu: boolean }>,
+): ConfrontoOnline[] {
+  const agora = new Date().toISOString();
+  return confrontos.map(c => ({
+    ...c,
+    disponivel_em: c.disponivel_em ?? agora,
+    slot1_pronto: c.slot1_pronto ?? !!slotsInfo.get(c.slot1_id)?.is_cpu,
+    slot2_pronto: c.slot2_pronto ?? !!slotsInfo.get(c.slot2_id)?.is_cpu,
+  }));
 }
 
 async function buscarTorneio(admin: AdminClient, salaId: string) {
@@ -344,6 +369,13 @@ export const simularPartidaOnline = createServerFn({ method: "POST" })
       if (existente?.encerrada) return existente;
     }
 
+    // Guard de pronto: só simula se AMBOS os lados estão prontos.
+    // (CPU é marcada como pronta automaticamente ao criar o confronto.)
+    if (!confronto.slot1_pronto || !confronto.slot2_pronto) {
+      throw new Error("Aguardando os dois jogadores apertarem 'estou pronto'.");
+    }
+
+
     // Busca os dois slots
     const { data: slot1Row } = await admin
       .from("sala_jogadores")
@@ -473,7 +505,8 @@ export const avancarFaseOnline = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const admin = await getAdmin();
     const userId = (context as { userId: string }).userId;
-    await exigirMestre(admin, data.salaId, userId);
+    // Qualquer membro humano pode disparar o avanço (auto-início entre rodadas).
+    await exigirMembro(admin, data.salaId, userId);
 
     const torneio = await buscarTorneio(admin, data.salaId);
     const grupos: SlotGrupo[] = torneio.grupos ?? [];
@@ -482,10 +515,17 @@ export const avancarFaseOnline = createServerFn({ method: "POST" })
     const faseAtual: string = torneio.fase_atual;
     const rodadaAtual: number = torneio.rodada_grupos_atual ?? 1;
 
+    // Mapa de slot_id → {is_cpu} pra marcar pronto automático das CPUs nos novos confrontos.
+    const { data: sjRows } = await admin
+      .from("sala_jogadores")
+      .select("id, is_cpu")
+      .eq("sala_id", data.salaId);
+    const slotsInfo = new Map<string, { is_cpu: boolean }>(
+      ((sjRows ?? []) as { id: string; is_cpu: boolean }[]).map(s => [s.id, { is_cpu: s.is_cpu }]),
+    );
+
     // ── FASE DE GRUPOS ──────────────────────────────────────────────
     if (faseAtual === "grupos") {
-      // Verifica se todos os jogos da rodada atual estão simulados
-      // (confrontos de grupo são gerados sob demanda — aqui geramos e verificamos)
       const confrontosDaRodada = chaveamento.filter(
         (c: ConfrontoOnline) => c.fase === "grupos" && parseInt(c.id.split("-")[2] ?? "1") === rodadaAtual,
       );
@@ -495,21 +535,27 @@ export const avancarFaseOnline = createServerFn({ method: "POST" })
       }
 
       if (rodadaAtual < 3) {
-        // Avança para próxima rodada de grupos
+        // Idempotência: outro client pode já ter avançado a rodada.
+        if (torneio.rodada_grupos_atual !== rodadaAtual) return { ok: true, proximaFase: "grupos", rodada: torneio.rodada_grupos_atual };
         await admin
           .from("torneio_online")
           .update({ rodada_grupos_atual: rodadaAtual + 1 })
-          .eq("sala_id", data.salaId);
+          .eq("sala_id", data.salaId)
+          .eq("rodada_grupos_atual", rodadaAtual);
         return { ok: true, proximaFase: "grupos", rodada: rodadaAtual + 1 };
       }
 
-      // Rodada 3 concluída: gera oitavas
+      // Rodada 3 concluída: idempotência — se oitavas já existem, sai.
+      if (chaveamento.some(c => c.fase === "oitavas")) {
+        return { ok: true, proximaFase: "oitavas", rodada: 1 };
+      }
+
       const classificados: { grupo: string; slot_id: string }[] = [];
       for (const nomeGrupo of NOMES_GRUPOS) {
         const top2 = classificarGrupo(nomeGrupo, grupos, classif).slice(0, 2);
         for (const s of top2) classificados.push({ grupo: nomeGrupo, slot_id: s.slot_id });
       }
-      const oitavas = gerarOitavas(classificados);
+      const oitavas = aplicarMetaConfrontos(gerarOitavas(classificados), slotsInfo);
 
       await admin
         .from("torneio_online")
@@ -543,6 +589,8 @@ export const avancarFaseOnline = createServerFn({ method: "POST" })
 
     const proximaFase = proxFase[faseAtual as FaseMata];
     if (proximaFase === "encerrado") {
+      // Idempotência
+      if (torneio.fase_atual === "encerrado") return { ok: true, proximaFase: "encerrado" };
       await admin
         .from("torneio_online")
         .update({ fase_atual: "encerrado" })
@@ -551,11 +599,16 @@ export const avancarFaseOnline = createServerFn({ method: "POST" })
       return { ok: true, proximaFase: "encerrado" };
     }
 
+    // Idempotência: se a próxima fase já tem confrontos, sai sem regerar.
+    if (chaveamento.some(c => c.fase === proximaFase)) {
+      return { ok: true, proximaFase };
+    }
+
     // Monta confrontos da fase seguinte a partir dos vencedores
     const vencedores = confrontosFase.map((c: ConfrontoOnline) => c.vencedor_slot_id!);
-    const novosConfrontos: ConfrontoOnline[] = [];
+    const novosBruto: ConfrontoOnline[] = [];
     for (let i = 0; i < vencedores.length; i += 2) {
-      novosConfrontos.push({
+      novosBruto.push({
         id: `${proximaFase}-${i / 2 + 1}`,
         fase: proximaFase!,
         slot1_id: vencedores[i]!,
@@ -564,6 +617,7 @@ export const avancarFaseOnline = createServerFn({ method: "POST" })
         partida_online_id: null,
       });
     }
+    const novosConfrontos = aplicarMetaConfrontos(novosBruto, slotsInfo);
 
     await admin
       .from("torneio_online")
@@ -576,6 +630,7 @@ export const avancarFaseOnline = createServerFn({ method: "POST" })
     return { ok: true, proximaFase };
   });
 
+
 /**
  * Gera os confrontos da rodada atual de grupos para a sala.
  * Cada rodada tem N/2 confrontos (round-robin por grupo).
@@ -587,7 +642,8 @@ export const gerarRodadaGrupos = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const admin = await getAdmin();
     const userId = (context as { userId: string }).userId;
-    await exigirMestre(admin, data.salaId, userId);
+    // Qualquer membro pode disparar a geração (idempotente).
+    await exigirMembro(admin, data.salaId, userId);
 
     const torneio = await buscarTorneio(admin, data.salaId);
     if (torneio.fase_atual !== "grupos") throw new Error("Não está na fase de grupos.");
@@ -596,26 +652,25 @@ export const gerarRodadaGrupos = createServerFn({ method: "POST" })
     const chaveamento: ConfrontoOnline[] = torneio.chaveamento ?? [];
     const grupos: SlotGrupo[] = torneio.grupos ?? [];
 
-    // Verifica se já foram gerados para esta rodada
     const jaExistem = chaveamento.some(
       (c: ConfrontoOnline) => c.fase === "grupos" && parseInt(c.id.split("-")[2] ?? "1") === rodada,
     );
     if (jaExistem) return { ok: true, confrontos: chaveamento.filter((c: ConfrontoOnline) => c.fase === "grupos") };
 
-    // Round-robin dentro de cada grupo: 4 times → 3 rodadas de 2 jogos cada.
-    // Rodada 1: pos0 x pos1, pos2 x pos3
-    // Rodada 2: pos0 x pos2, pos1 x pos3
-    // Rodada 3: pos0 x pos3, pos1 x pos2
     const pares: [number, number][] = rodada === 1 ? [[0, 1], [2, 3]] : rodada === 2 ? [[0, 2], [1, 3]] : [[0, 3], [1, 2]];
 
-    const novos: ConfrontoOnline[] = [];
+    const slotsInfo = new Map<string, { is_cpu: boolean }>(
+      grupos.map(g => [g.slot_id, { is_cpu: g.is_cpu }]),
+    );
+
+    const novosBruto: ConfrontoOnline[] = [];
     for (const nomeGrupo of NOMES_GRUPOS) {
       const doGrupo = grupos.filter(s => s.grupo === nomeGrupo);
       for (const [a, b] of pares) {
         const s1 = doGrupo[a];
         const s2 = doGrupo[b];
         if (!s1 || !s2) continue;
-        novos.push({
+        novosBruto.push({
           id: `grupos-${nomeGrupo}-${rodada}-${a}${b}`,
           fase: "grupos",
           slot1_id: s1.slot_id,
@@ -625,6 +680,7 @@ export const gerarRodadaGrupos = createServerFn({ method: "POST" })
         });
       }
     }
+    const novos = aplicarMetaConfrontos(novosBruto, slotsInfo);
 
     await admin
       .from("torneio_online")
@@ -633,3 +689,138 @@ export const gerarRodadaGrupos = createServerFn({ method: "POST" })
 
     return { ok: true, confrontos: novos };
   });
+
+// ===========================================================================
+// Auto-início entre partidas: cada jogador tem PRAZO_PRONTO_MS pra apertar
+// "estou pronto" no seu próximo confronto. CPU é marcada como pronta na
+// criação do confronto. Se o prazo estourar e o humano não confirmou, qualquer
+// membro pode chamar resolverWOConfronto pra encerrar como WO.
+// ===========================================================================
+
+/** Marca o slot do usuário (ou o slot1 se ele for casa, ou slot2 se for fora)
+ * como pronto pro confronto. Se for a primeira confirmação, também garante
+ * que disponivel_em esteja setado (defesa para confrontos pré-existentes). */
+export const confirmarProntoConfronto = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => SimularInput.parse(input))
+  .handler(async ({ data, context }) => {
+    const admin = await getAdmin();
+    const userId = (context as { userId: string }).userId;
+    const me = await exigirMembro(admin, data.salaId, userId);
+
+    const torneio = await buscarTorneio(admin, data.salaId);
+    const chaveamento: ConfrontoOnline[] = torneio.chaveamento ?? [];
+    const idx = chaveamento.findIndex(c => c.id === data.confrontoId);
+    if (idx === -1) throw new Error("Confronto não encontrado.");
+    const c = chaveamento[idx]!;
+    if (c.partida_online_id) return { ok: true }; // já jogado
+    if (c.slot1_id !== me.id && c.slot2_id !== me.id) {
+      throw new Error("Você não está neste confronto.");
+    }
+    const novo: ConfrontoOnline = {
+      ...c,
+      disponivel_em: c.disponivel_em ?? new Date().toISOString(),
+      slot1_pronto: c.slot1_pronto || c.slot1_id === me.id,
+      slot2_pronto: c.slot2_pronto || c.slot2_id === me.id,
+    };
+    const novoChaveamento = [...chaveamento];
+    novoChaveamento[idx] = novo;
+    await admin
+      .from("torneio_online")
+      .update({ chaveamento: novoChaveamento })
+      .eq("sala_id", data.salaId);
+    return { ok: true, ambosProntos: !!(novo.slot1_pronto && novo.slot2_pronto) };
+  });
+
+/** Resolve um confronto por WO: o(s) lado(s) que não apertou pronto leva 0x3.
+ * Só funciona se o prazo já estourou. Idempotente. */
+export const resolverWOConfronto = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => SimularInput.parse(input))
+  .handler(async ({ data, context }) => {
+    const admin = await getAdmin();
+    const userId = (context as { userId: string }).userId;
+    await exigirMembro(admin, data.salaId, userId);
+
+    const torneio = await buscarTorneio(admin, data.salaId);
+    const chaveamento: ConfrontoOnline[] = torneio.chaveamento ?? [];
+    const idx = chaveamento.findIndex(c => c.id === data.confrontoId);
+    if (idx === -1) throw new Error("Confronto não encontrado.");
+    const c = chaveamento[idx]!;
+    if (c.partida_online_id) {
+      // já encerrado por outro caminho
+      const { data: existente } = await admin
+        .from("partida_online")
+        .select("*")
+        .eq("id", c.partida_online_id)
+        .maybeSingle();
+      return existente;
+    }
+    if (c.slot1_pronto && c.slot2_pronto) {
+      throw new Error("Os dois estão prontos — chame simularPartidaOnline.");
+    }
+    const inicio = c.disponivel_em ? new Date(c.disponivel_em).getTime() : null;
+    if (!inicio || Date.now() - inicio < PRAZO_PRONTO_MS) {
+      throw new Error("Ainda dentro do prazo de 30s.");
+    }
+
+    // Determina vencedor por WO
+    let vencedorSlotId: string;
+    let placar1 = 0, placar2 = 0;
+    const texto: string[] = [];
+    if (c.slot1_pronto && !c.slot2_pronto) {
+      vencedorSlotId = c.slot1_id; placar1 = 3;
+      texto.push("Vitória por WO — adversário não confirmou em 30s");
+    } else if (c.slot2_pronto && !c.slot1_pronto) {
+      vencedorSlotId = c.slot2_id; placar2 = 3;
+      texto.push("Vitória por WO — adversário não confirmou em 30s");
+    } else {
+      // ninguém apertou: WO duplo, slot1 avança por critério arbitrário
+      vencedorSlotId = c.slot1_id;
+      texto.push("WO duplo — nenhum jogador confirmou em 30s");
+    }
+
+    // Busca user_ids pros campos jogadorN_id (NOT NULL no schema antigo, usa zero-uuid se for CPU)
+    const { data: slot1Row } = await admin.from("sala_jogadores").select("user_id").eq("id", c.slot1_id).maybeSingle();
+    const { data: slot2Row } = await admin.from("sala_jogadores").select("user_id").eq("id", c.slot2_id).maybeSingle();
+
+    const { data: partida, error: errPartida } = await admin
+      .from("partida_online")
+      .insert({
+        jogador1_id: slot1Row?.user_id ?? "00000000-0000-0000-0000-000000000000",
+        jogador2_id: slot2Row?.user_id ?? "00000000-0000-0000-0000-000000000000",
+        placar1, placar2,
+        vencedor_id: vencedorSlotId === c.slot1_id ? slot1Row?.user_id ?? null : slot2Row?.user_id ?? null,
+        sala_id: data.salaId,
+        fase: c.fase,
+        rodada: 1,
+        log_eventos: [{ minuto: 1, tipo: "info", texto: texto[0]! }],
+        penaltis: null,
+        encerrada: true,
+      })
+      .select("*")
+      .single();
+    if (errPartida) throw new Error(errPartida.message);
+
+    const novoChaveamento = chaveamento.map(x =>
+      x.id === c.id ? { ...x, vencedor_slot_id: vencedorSlotId, partida_online_id: partida.id } : x,
+    );
+    let novaClassif = { ...(torneio.classificacao_grupos ?? {}) } as Record<string, ClassifLinha>;
+    if (c.fase === "grupos") {
+      const c1 = novaClassif[c.slot1_id] ?? { pontos: 0, gols_pro: 0, gols_contra: 0, jogos: 0 };
+      const c2 = novaClassif[c.slot2_id] ?? { pontos: 0, gols_pro: 0, gols_contra: 0, jogos: 0 };
+      c1.jogos++; c2.jogos++;
+      c1.gols_pro += placar1; c1.gols_contra += placar2;
+      c2.gols_pro += placar2; c2.gols_contra += placar1;
+      if (placar1 > placar2) c1.pontos += 3;
+      else if (placar2 > placar1) c2.pontos += 3;
+      novaClassif = { ...novaClassif, [c.slot1_id]: c1, [c.slot2_id]: c2 };
+    }
+    await admin
+      .from("torneio_online")
+      .update({ chaveamento: novoChaveamento, classificacao_grupos: novaClassif })
+      .eq("sala_id", data.salaId);
+
+    return partida;
+  });
+

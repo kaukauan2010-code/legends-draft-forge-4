@@ -6,6 +6,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Copy, Check, X, Crown, Bot, Plus, Play } from "lucide-react";
+import { ChatPlaceholder } from "@/components/ChatPlaceholder";
 
 export const Route = createFileRoute("/_app/online/$codigo")({
   component: SalaLobby,
@@ -197,19 +198,8 @@ function SalaLobby() {
               ))}
             </div>
           </div>
-          <div>
-            <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Velocidade</div>
-            <div className="grid grid-cols-3 gap-1">
-              {(["normal","rapida","ultra"] as const).map(v => (
-                <button key={v} disabled={!ehMestre}
-                  onClick={() => atualizarConfig("velocidade", v)}
-                  className={cn("rounded border py-1.5 text-[10px] font-bold uppercase tracking-widest",
-                    sala.velocidade === v ? "border-primary bg-primary text-primary-foreground" : "border-border bg-secondary text-muted-foreground",
-                    !ehMestre && "opacity-60 cursor-not-allowed",
-                  )}>{v}</button>
-              ))}
-            </div>
-          </div>
+
+
         </div>
         <p className="text-[10px] text-muted-foreground">{labelComp} · até {sala.max_jogadores} jogadores</p>
       </section>
@@ -270,9 +260,8 @@ function SalaLobby() {
         </Button>
       </div>
 
-      <div className="text-center text-[10px] text-muted-foreground">
-        ⚠ Multiplayer fase 1: lobby + salas funcionando. Draft simultâneo e torneio online vêm nas próximas atualizações.
-      </div>
+      <ChatPlaceholder />
     </div>
   );
 }
+

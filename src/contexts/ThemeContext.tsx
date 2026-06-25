@@ -1,26 +1,14 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 
-type Theme = "dark" | "light";
-const ThemeCtx = createContext<{ theme: Theme; setTheme: (t: Theme) => void; toggle: () => void }>({
-  theme: "dark", setTheme: () => {}, toggle: () => {},
-});
-
+// Tema fixo: o jogo roda SEMPRE no modo escuro. Removido o seletor claro/escuro
+// a pedido do usuário — mantemos um provider mínimo apenas para garantir que
+// a classe `dark` esteja no <html>.
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>(() => {
-    if (typeof window === "undefined") return "dark";
-    return (localStorage.getItem("wcd-theme") as Theme) || "dark";
-  });
   useEffect(() => {
     const root = document.documentElement;
-    root.classList.remove("dark", "light");
-    root.classList.add(theme);
-    localStorage.setItem("wcd-theme", theme);
-  }, [theme]);
-  return (
-    <ThemeCtx.Provider value={{ theme, setTheme: setThemeState, toggle: () => setThemeState(t => t === "dark" ? "light" : "dark") }}>
-      {children}
-    </ThemeCtx.Provider>
-  );
+    root.classList.remove("light");
+    root.classList.add("dark");
+    try { localStorage.setItem("wcd-theme", "dark"); } catch {}
+  }, []);
+  return <>{children}</>;
 }
-
-export const useTheme = () => useContext(ThemeCtx);

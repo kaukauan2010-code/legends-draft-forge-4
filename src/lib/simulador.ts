@@ -122,20 +122,24 @@ export function simularPartida(casa: Time, fora: Time, seed = Math.random()): Re
             : `⚽ ${min}' GOL do ${t.nome}! ${artilheiro.nome} (${artilheiro.forca}) marca. ${golsCasa}x${golsFora}`,
         });
       } else {
+        const finalizador = pickAtacante(t, rng);
         eventos.push({
           minuto: min, tipo: "chance", time: lado,
-          texto: `${min}' Chance de ${t.nome} desperdiçada.`,
+          texto: `${min}' ${finalizador.nome} (${t.nome}) desperdiçou uma chance clara.`,
         });
       }
     }
     if (min === 45) eventos.push({ minuto: 45, tipo: "info", texto: `⏸️ Fim do 1º tempo. ${golsCasa} x ${golsFora}` });
     if (min === 46) eventos.push({ minuto: 46, tipo: "info", texto: `▶️ Começa o 2º tempo.` });
     if (min === 60 && rng() < 0.5) {
-      eventos.push({ minuto: 60, tipo: "subst", texto: `🔁 ${rng() < 0.5 ? casa.nome : fora.nome} faz uma substituição.` });
+      const time = rng() < 0.5 ? casa : fora;
+      const sai = time.escalacao[Math.floor(rng() * time.escalacao.length)]!;
+      eventos.push({ minuto: 60, tipo: "subst", texto: `🔁 ${time.nome}: ${sai.nome} deixa o campo.` });
     }
     if (rng() < 0.01) {
       const t = rng() < 0.5 ? casa : fora;
-      eventos.push({ minuto: min, tipo: "cartao", texto: `🟨 ${min}' Cartão amarelo para ${t.nome}.` });
+      const faltoso = t.escalacao[Math.floor(rng() * t.escalacao.length)]!;
+      eventos.push({ minuto: min, tipo: "cartao", texto: `🟨 ${min}' Cartão amarelo para ${faltoso.nome} (${t.nome}).` });
     }
   }
   eventos.push({ minuto: 90, tipo: "info", texto: `🏁 Fim de jogo. ${casa.nome} ${golsCasa} x ${golsFora} ${fora.nome}` });

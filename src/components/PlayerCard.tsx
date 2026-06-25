@@ -3,13 +3,13 @@ import { cn } from "@/lib/utils";
 
 interface Props {
   jogador: Jogador;
+  /** Mantido por compat — força agora SEMPRE aparece, vinda do banco de dados. */
   esconderForca?: boolean;
   esconderRaridade?: boolean;
   onClick?: () => void;
   disabled?: boolean;
   selecionado?: boolean;
   compact?: boolean;
-  /** "card" (padrão, grande) ou "list" (linha única, bem mais compacta — ideal para listas longas de draft) */
   variant?: "card" | "list";
 }
 
@@ -45,7 +45,7 @@ const GRADIENTE_NEUTRO = "from-muted-foreground/40 to-slate-900";
 const TEXTO_NEUTRO = "text-muted-foreground";
 const BORDA_NEUTRA = "border-muted-foreground/40";
 
-export function PlayerCard({ jogador, esconderForca, esconderRaridade, onClick, disabled, selecionado, compact, variant = "card" }: Props) {
+export function PlayerCard({ jogador, esconderRaridade, onClick, disabled, selecionado, compact, variant = "card" }: Props) {
   const corGradiente = esconderRaridade ? GRADIENTE_NEUTRO : gradientes[jogador.raridade];
   const corTexto = esconderRaridade ? TEXTO_NEUTRO : texto[jogador.raridade];
   const corGlow = esconderRaridade ? "" : glow[jogador.raridade];
@@ -80,11 +80,7 @@ export function PlayerCard({ jogador, esconderForca, esconderRaridade, onClick, 
             {jogador.posicao}
           </p>
         </div>
-        {!esconderForca ? (
-          <span className="font-display text-lg font-black leading-none text-foreground shrink-0">{jogador.forca}</span>
-        ) : (
-          <span className="grid size-6 shrink-0 place-items-center rounded-full border border-dashed border-muted-foreground/40 text-[10px] text-muted-foreground">?</span>
-        )}
+        <span className="font-display text-lg font-black leading-none text-foreground shrink-0">{jogador.forca}</span>
       </button>
     );
   }
@@ -119,17 +115,10 @@ export function PlayerCard({ jogador, esconderForca, esconderRaridade, onClick, 
               {jogador.posicao}
             </p>
           </div>
-          {!esconderForca && (
-            <div className="text-right">
-              <div className="text-[9px] uppercase text-muted-foreground tracking-widest">Força</div>
-              <div className="font-display text-3xl font-black leading-none text-foreground">{jogador.forca}</div>
-            </div>
-          )}
-          {esconderForca && (
-            <div className="grid size-10 place-items-center rounded-full border-2 border-dashed border-muted-foreground/40 text-muted-foreground">
-              ?
-            </div>
-          )}
+          <div className="text-right">
+            <div className="text-[9px] uppercase text-muted-foreground tracking-widest">Força</div>
+            <div className="font-display text-3xl font-black leading-none text-foreground">{jogador.forca}</div>
+          </div>
         </div>
       </div>
     </button>

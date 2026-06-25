@@ -23,10 +23,15 @@ import {
   simularPartidaOnline,
   avancarFaseOnline,
   gerarRodadaGrupos,
+  confirmarProntoConfronto,
+  resolverWOConfronto,
 } from "@/lib/torneio-online.functions";
+import { ChatPlaceholder } from "@/components/ChatPlaceholder";
 
 const TIMEOUT_OFFLINE_MS = 35000; // sem heartbeat por 35s = considerado desconectado
 const HEARTBEAT_MS = 15000;
+const PRAZO_PRONTO_MS = 30000; // tempo para apertar "estou pronto" antes de WO
+
 
 export const Route = createFileRoute("/_app/online/$codigo/torneio")({
   head: () => ({ meta: [{ title: "Torneio Online — World Cup Draft" }] }),
@@ -45,14 +50,23 @@ interface SlotGrupo { slot_id: string; user_id: string | null; nome: string; is_
 interface ConfrontoOnline {
   id: string; fase: string; slot1_id: string; slot2_id: string;
   vencedor_slot_id: string | null; partida_online_id: string | null;
+  disponivel_em?: string | null;
+  slot1_pronto?: boolean;
+  slot2_pronto?: boolean;
 }
 interface ClassifLinha { pontos: number; gols_pro: number; gols_contra: number; jogos: number; }
 
-const DUR_REPLAY_MS = 12000; // replay sempre rápido — o jogo já foi decidido no servidor
+// Duração do replay visual local conforme a velocidade escolhida pelo jogador.
+// (O resultado já vem decidido do servidor — isto só controla a velocidade
+// da animação no front. Cada jogador escolhe a sua e salvamos no localStorage.)
+const REPLAY_MS: Record<"normal" | "rapida" | "ultra", number> = {
+  normal: 30000, rapida: 12000, ultra: 4000,
+};
 const FASES_MATA = ["oitavas", "quartas", "semi", "final"] as const;
 const TITULO_FASE: Record<string, string> = {
   grupos: "Fase de grupos", oitavas: "Oitavas", quartas: "Quartas de final",
   semi: "Semifinal", final: "Final", encerrado: "Torneio encerrado",
+
 };
 
 function TorneioOnline() {
@@ -74,6 +88,14 @@ function TorneioOnline() {
   const campanhaSalvaRef = useRef(false);
   const [resolvendoId, setResolvendoId] = useState<string | null>(null);
   const [, forceTick] = useState(0);
+
+  // Velocidade do replay agora é FIXA em "ultra" para todo mundo (sem seletor).
+  const velocidadeReplay: "ultra" = "ultra";
+
+  // Auto-início + WO
+  const [confirmandoPronto, setConfirmandoPronto] = useState(false);
+  const woDisparadosRef = useRef<Set<string>>(new Set());
+  const autoStartedRef = useRef<Set<string>>(new Set());
 
   // replay visual de uma partida já decidida no servidor
   const [replay, setReplay] = useState<{
@@ -163,7 +185,7 @@ function TorneioOnline() {
   const classif = (torneio?.classificacao_grupos as unknown as Record<string, ClassifLinha>) ?? {};
   const faseAtual = torneio?.fase_atual ?? "grupos";
   const rodadaAtual = torneio?.rodada_grupos_atual ?? 1;
-  const ehMestre = !!sala && user?.id === sala.mestre_id;
+  // (ehMestre não é mais usado aqui — avanço de fase é automático para qualquer membro.)
 
   // confrontos relevantes "agora": da rodada de grupos atual, ou da fase de mata-mata atual
   const confrontosAtuais = faseAtual === "grupos"
@@ -179,13 +201,53 @@ function TorneioOnline() {
     faseAtual === "grupos" ? !!c.partida_online_id : !!c.vencedor_slot_id,
   );
 
-  // mestre: garante que a rodada de grupos atual tenha confrontos gerados
+  // qualquer membro: garante que a rodada de grupos atual tenha confrontos gerados
   useEffect(() => {
-    if (!ehMestre || !torneio || faseAtual !== "grupos") return;
+    if (!torneio || !sala || faseAtual !== "grupos") return;
     if (confrontosAtuais.length > 0) return;
-    gerarRodadaGrupos({ data: { salaId: sala!.id } }).catch(() => { /* idempotente, silencioso */ });
+    gerarRodadaGrupos({ data: { salaId: sala.id } }).catch(() => { /* idempotente */ });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ehMestre, torneio?.id, faseAtual, rodadaAtual, confrontosAtuais.length]);
+  }, [torneio?.id, faseAtual, rodadaAtual, confrontosAtuais.length]);
+
+  // auto-avançar fase: assim que todos os confrontos da fase/rodada estão resolvidos.
+  useEffect(() => {
+    if (!sala || !todosResolvidos || avancando) return;
+    if (faseAtual === "encerrado") return;
+    // pequeno delay pra evitar corrida
+    const t = setTimeout(() => {
+      avancarFaseOnline({ data: { salaId: sala.id } }).catch(() => { /* idempotente */ });
+    }, 1500);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [todosResolvidos, faseAtual, rodadaAtual, sala?.id]);
+
+  // auto-start: quando ambos prontos no meu confronto e ainda não jogou.
+  useEffect(() => {
+    if (!meuConfronto || !sala || jogando || replay || resumo) return;
+    if (!meuConfronto.slot1_pronto || !meuConfronto.slot2_pronto) return;
+    if (autoStartedRef.current.has(meuConfronto.id)) return;
+    autoStartedRef.current.add(meuConfronto.id);
+    jogarMeuConfronto();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [meuConfronto?.id, meuConfronto?.slot1_pronto, meuConfronto?.slot2_pronto, jogando, replay, resumo]);
+
+  // auto-WO: qualquer client dispara WO num confronto pendente cujo prazo de 30s estourou.
+  useEffect(() => {
+    if (!sala) return;
+    for (const c of confrontosAtuais) {
+      if (c.partida_online_id) continue;
+      if (c.slot1_pronto && c.slot2_pronto) continue;
+      if (!c.disponivel_em) continue;
+      const decorrido = Date.now() - new Date(c.disponivel_em).getTime();
+      if (decorrido < PRAZO_PRONTO_MS) continue;
+      if (woDisparadosRef.current.has(c.id)) continue;
+      woDisparadosRef.current.add(c.id);
+      resolverWOConfronto({ data: { salaId: sala.id, confrontoId: c.id } }).catch(() => { /* idempotente */ });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [confrontosAtuais, sala?.id]);
+
+
 
   function montarTimeDeSlot(slot: SlotJogador): Time {
     const df = slot.user_id ? draftsFormacao[slot.user_id] : undefined;
@@ -318,7 +380,7 @@ function TorneioOnline() {
 
       setReplay({ casa, fora, eventos, minuto: 0, mostrados: [], placarCasa: 0, placarFora: 0, penaltis });
 
-      const ms = DUR_REPLAY_MS / 90;
+      const ms = REPLAY_MS[velocidadeReplay] / 90;
       if (intervaloRef.current) clearInterval(intervaloRef.current);
       intervaloRef.current = setInterval(() => {
         setReplay(prev => {
@@ -347,20 +409,9 @@ function TorneioOnline() {
     }
   };
 
-  // ---------- mestre: avançar fase/rodada ----------
-  const avancar = async () => {
-    if (!sala || avancando) return;
-    setAvancando(true);
-    try {
-      const r = await avancarFaseOnline({ data: { salaId: sala.id } }) as { proximaFase: string };
-      if (r.proximaFase === "encerrado") toast.success("Torneio encerrado!");
-      else toast.success(`Avançou para: ${TITULO_FASE[r.proximaFase] ?? r.proximaFase}`);
-    } catch (e) {
-      toast.error((e as Error).message);
-    } finally {
-      setAvancando(false);
-    }
-  };
+  // (Antes existia botão "avançar fase" só pro mestre. Agora qualquer client
+  // dispara o avanço automaticamente via efeito após todos resolverem — ver acima.)
+
 
   if (carregando || !sala) {
     return <div className="grid min-h-[60vh] place-items-center text-muted-foreground text-sm">Carregando torneio...</div>;
@@ -461,25 +512,31 @@ function TorneioOnline() {
 
       {/* Meu confronto da rodada/fase atual */}
       {meuSlot && meuConfronto ? (
-        <section className="rounded-xl border border-primary/50 bg-primary/5 p-4 text-center space-y-3">
-          <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Sua partida</p>
-          <p className="font-display text-lg uppercase italic">
-            {nomeDe(meuConfronto.slot1_id)} <span className="text-muted-foreground">vs</span> {nomeDe(meuConfronto.slot2_id)}
-          </p>
-          <Button onClick={jogarMeuConfronto} disabled={jogando} className="w-full h-12 font-display uppercase tracking-widest font-black">
-            <Play className="size-4 mr-2" /> {jogando ? "Jogando..." : "Jogar partida"}
-          </Button>
-        </section>
+        <ConfrontoPendenteCard
+          confronto={meuConfronto}
+          meuSlotId={meuSlot.id}
+          nomeDe={nomeDe}
+          jogando={jogando}
+          confirmando={confirmandoPronto}
+          onConfirmarPronto={async () => {
+            if (!sala) return;
+            setConfirmandoPronto(true);
+            try { await confirmarProntoConfronto({ data: { salaId: sala.id, confrontoId: meuConfronto.id } }); }
+            catch (e) { toast.error((e as Error).message); }
+            finally { setConfirmandoPronto(false); }
+          }}
+        />
       ) : meuSlot ? (
-        <section className="rounded-xl border border-border bg-card p-4 text-center space-y-1">
-          <Hourglass className="mx-auto size-6 text-muted-foreground animate-pulse" />
-          <p className="text-sm font-bold">
-            {confrontosAtuais.some(c => c.slot1_id === meuSlot.id || c.slot2_id === meuSlot.id)
-              ? "Aguardando o fim da sua partida ser confirmado..."
-              : "Você não tem partida nesta rodada — aguardando os outros."}
-          </p>
-        </section>
+        <AguardandoCard
+          confrontosAtuais={confrontosAtuais}
+          meuSlotId={meuSlot.id}
+          nomeDe={nomeDe}
+          faseAtual={faseAtual}
+        />
       ) : null}
+
+
+
 
       {/* Confrontos da rodada/fase, status geral */}
       <section className="rounded-xl border border-border bg-card p-3 space-y-2">
@@ -490,8 +547,12 @@ function TorneioOnline() {
           {confrontosAtuais.map(c => {
             const pendente = faseAtual === "grupos" ? !c.partida_online_id : !c.vencedor_slot_id;
             const travada = pendente && c.id !== meuConfronto?.id && (estaOffline(c.slot1_id) || estaOffline(c.slot2_id));
+            const eMeu = !!meuSlot && (c.slot1_id === meuSlot.id || c.slot2_id === meuSlot.id);
             return (
-              <li key={c.id} className="rounded-lg border border-border bg-secondary/40 px-2.5 py-1.5 text-xs space-y-1">
+              <li key={c.id} className={cn(
+                "rounded-lg border bg-secondary/40 px-2.5 py-1.5 text-xs space-y-1",
+                eMeu ? "border-primary/50" : "border-border",
+              )}>
                 <div className="flex items-center justify-between">
                   <span className="truncate font-bold">{nomeDe(c.slot1_id)}</span>
                   <span className={cn("px-2 font-display font-black", c.vencedor_slot_id || c.partida_online_id ? "text-primary" : "text-muted-foreground")}>
@@ -499,6 +560,12 @@ function TorneioOnline() {
                   </span>
                   <span className="truncate text-right font-bold">{nomeDe(c.slot2_id)}</span>
                 </div>
+                {pendente && c.disponivel_em && !(c.slot1_pronto && c.slot2_pronto) && (
+                  <div className="flex items-center justify-center gap-1 text-[9px] text-muted-foreground">
+                    <span>{c.slot1_pronto ? "✓" : "•"}</span>
+                    <span>{c.slot2_pronto ? "✓" : "•"}</span>
+                  </div>
+                )}
                 {travada && (
                   <button onClick={() => resolverPartidaTravada(c.id)} disabled={resolvendoId === c.id}
                     className="w-full flex items-center justify-center gap-1.5 rounded-md bg-destructive/10 text-destructive py-1 text-[10px] uppercase tracking-wide font-bold">
@@ -512,9 +579,9 @@ function TorneioOnline() {
         </ul>
       </section>
 
-      {/* Classificação dos grupos */}
+      {/* Classificação dos grupos: meu grupo + todos */}
       {faseAtual === "grupos" && grupos.length > 0 && (
-        <TabelaGrupos grupos={grupos} classif={classif} nomeDe={nomeDe} meuSlotId={meuSlot?.id ?? null} />
+        <ClassificacaoTabs grupos={grupos} classif={classif} nomeDe={nomeDe} meuSlotId={meuSlot?.id ?? null} />
       )}
 
       {/* Bracket de mata-mata */}
@@ -522,51 +589,18 @@ function TorneioOnline() {
         <BracketSimples chaveamento={chaveamento} nomeDe={nomeDe} faseDestaque={faseAtual} />
       )}
 
-      {ehMestre && (
-        <Button onClick={avancar} disabled={!todosResolvidos || avancando} variant="outline"
-          className="w-full h-12 font-display uppercase tracking-widest font-black">
-          {avancando ? "Avançando..." : todosResolvidos ? "Avançar fase" : "Aguardando jogos pendentes..."}
-        </Button>
-      )}
+      {/* Chat (placeholder) */}
+      <ChatPlaceholder />
+
+      <p className="text-center text-[10px] text-muted-foreground">
+        As próximas fases iniciam automaticamente quando todos os confrontos terminam.
+      </p>
     </div>
   );
 }
 
-function TabelaGrupos({ grupos, classif, nomeDe, meuSlotId }: {
-  grupos: SlotGrupo[]; classif: Record<string, ClassifLinha>; nomeDe: (id: string | null) => string; meuSlotId: string | null;
-}) {
-  const meuGrupo = grupos.find(g => g.slot_id === meuSlotId)?.grupo;
-  const nomesGrupos = Array.from(new Set(grupos.map(g => g.grupo))).sort();
-  const grupoPrincipal = meuGrupo ?? nomesGrupos[0];
-  const doGrupo = grupos.filter(g => g.grupo === grupoPrincipal).sort((a, b) => {
-    const ca = classif[a.slot_id] ?? { pontos: 0, gols_pro: 0, gols_contra: 0, jogos: 0 };
-    const cb = classif[b.slot_id] ?? { pontos: 0, gols_pro: 0, gols_contra: 0, jogos: 0 };
-    return (cb.pontos - ca.pontos) || ((cb.gols_pro - cb.gols_contra) - (ca.gols_pro - ca.gols_contra));
-  });
-  return (
-    <section className="rounded-xl border border-border bg-card p-3 space-y-2">
-      <h2 className="text-[10px] uppercase tracking-widest text-muted-foreground">Grupo {grupoPrincipal}</h2>
-      <table className="w-full text-[11px]">
-        <thead className="text-muted-foreground">
-          <tr><th className="text-left">Time</th><th>P</th><th>SG</th><th>GP</th></tr>
-        </thead>
-        <tbody>
-          {doGrupo.map(g => {
-            const c = classif[g.slot_id] ?? { pontos: 0, gols_pro: 0, gols_contra: 0, jogos: 0 };
-            return (
-              <tr key={g.slot_id} className={cn(g.slot_id === meuSlotId && "text-primary font-bold")}>
-                <td className="py-0.5 truncate max-w-[8rem]">{g.is_cpu ? <Bot className="size-3 inline mr-1" /> : <Crown className="size-3 inline mr-1 text-legendary" />}{nomeDe(g.slot_id)}</td>
-                <td className="text-center tabular-nums">{c.pontos}</td>
-                <td className="text-center tabular-nums">{c.gols_pro - c.gols_contra}</td>
-                <td className="text-center tabular-nums">{c.gols_pro}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </section>
-  );
-}
+// (TabelaGrupos antigo removido — substituído por ClassificacaoTabs com meu grupo + todos.)
+
 
 function BracketSimples({ chaveamento, nomeDe, faseDestaque }: {
   chaveamento: ConfrontoOnline[]; nomeDe: (id: string | null) => string; faseDestaque?: string;
@@ -626,5 +660,166 @@ function TimeEscalacaoOnline({ time, titulo }: { time: Time; titulo: string }) {
         ))}
       </ul>
     </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────
+// Card do confronto pendente: mostra placar "vs", status de pronto
+// dos dois lados, countdown de 30s e botão "Estou pronto".
+// Quando ambos confirmam, auto-start dispara (no efeito do componente pai).
+// ──────────────────────────────────────────────────────────────
+function ConfrontoPendenteCard({
+  confronto, meuSlotId, nomeDe, jogando, confirmando, onConfirmarPronto,
+}: {
+  confronto: ConfrontoOnline; meuSlotId: string; nomeDe: (id: string | null) => string;
+  jogando: boolean; confirmando: boolean; onConfirmarPronto: () => void;
+}) {
+  const [, tick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => tick(t => t + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const souSlot1 = confronto.slot1_id === meuSlotId;
+  const minhaProntidao = souSlot1 ? !!confronto.slot1_pronto : !!confronto.slot2_pronto;
+  const outraProntidao = souSlot1 ? !!confronto.slot2_pronto : !!confronto.slot1_pronto;
+  const nomeAdversario = nomeDe(souSlot1 ? confronto.slot2_id : confronto.slot1_id);
+
+  const inicio = confronto.disponivel_em ? new Date(confronto.disponivel_em).getTime() : null;
+  const restanteMs = inicio ? Math.max(0, PRAZO_PRONTO_MS - (Date.now() - inicio)) : PRAZO_PRONTO_MS;
+  const segRestantes = Math.ceil(restanteMs / 1000);
+  const ambosProntos = confronto.slot1_pronto && confronto.slot2_pronto;
+
+  return (
+    <section className="rounded-xl border border-primary/50 bg-primary/5 p-4 text-center space-y-3">
+      <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Sua partida</p>
+      <p className="font-display text-lg uppercase italic">
+        {nomeDe(confronto.slot1_id)} <span className="text-muted-foreground">vs</span> {nomeDe(confronto.slot2_id)}
+      </p>
+      <div className="grid grid-cols-2 gap-2 text-[10px]">
+        <div className={cn(
+          "rounded-md border px-2 py-1.5 font-bold uppercase tracking-widest",
+          minhaProntidao ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground",
+        )}>
+          {minhaProntidao ? "✓ Você" : "Você"}
+        </div>
+        <div className={cn(
+          "rounded-md border px-2 py-1.5 font-bold uppercase tracking-widest truncate",
+          outraProntidao ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground",
+        )}>
+          {outraProntidao ? "✓ " : ""}{nomeAdversario}
+        </div>
+      </div>
+      {jogando ? (
+        <div className="text-sm font-bold text-primary">Iniciando partida...</div>
+      ) : ambosProntos ? (
+        <div className="text-sm font-bold text-primary animate-pulse">Iniciando automaticamente...</div>
+      ) : minhaProntidao ? (
+        <div className="text-xs text-muted-foreground">Aguardando adversário confirmar... <span className="font-bold text-primary">{segRestantes}s</span></div>
+      ) : (
+        <>
+          <Button onClick={onConfirmarPronto} disabled={confirmando} className="w-full h-12 font-display uppercase tracking-widest font-black">
+            <Play className="size-4 mr-2" /> {confirmando ? "Confirmando..." : `Estou pronto (${segRestantes}s)`}
+          </Button>
+          {segRestantes <= 5 && (
+            <p className="text-[10px] text-destructive font-bold uppercase tracking-widest">⚠ Se não confirmar, você leva WO!</p>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────
+// Card "aguardando": meu jogo da rodada já terminou, mas ainda há
+// confrontos pendentes (eu vou enfrentar o vencedor de algum).
+// ──────────────────────────────────────────────────────────────
+function AguardandoCard({
+  confrontosAtuais, meuSlotId, nomeDe, faseAtual,
+}: {
+  confrontosAtuais: ConfrontoOnline[]; meuSlotId: string;
+  nomeDe: (id: string | null) => string; faseAtual: string;
+}) {
+  const meuJogo = confrontosAtuais.find(c => c.slot1_id === meuSlotId || c.slot2_id === meuSlotId);
+  const pendentesOutros = confrontosAtuais.filter(c =>
+    !c.partida_online_id && c.slot1_id !== meuSlotId && c.slot2_id !== meuSlotId,
+  );
+  return (
+    <section className="rounded-xl border border-border bg-card p-4 text-center space-y-2">
+      <Hourglass className="mx-auto size-6 text-muted-foreground animate-pulse" />
+      <p className="text-sm font-bold">
+        {meuJogo
+          ? "Aguardando confirmação do resultado da sua partida..."
+          : pendentesOutros.length > 0
+            ? `Aguardando: ${pendentesOutros.map(c => `${nomeDe(c.slot1_id)} vs ${nomeDe(c.slot2_id)}`).slice(0, 2).join(", ")}${pendentesOutros.length > 2 ? "…" : ""}`
+            : faseAtual === "grupos"
+              ? "Aguardando próxima rodada..."
+              : "Aguardando próxima fase..."}
+      </p>
+      <p className="text-[10px] text-muted-foreground">A próxima fase começa automaticamente.</p>
+    </section>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────
+// Classificação geral: tabs "Meu grupo" / "Todos os grupos"
+// ──────────────────────────────────────────────────────────────
+function ClassificacaoTabs({ grupos, classif, nomeDe, meuSlotId }: {
+  grupos: SlotGrupo[]; classif: Record<string, ClassifLinha>;
+  nomeDe: (id: string | null) => string; meuSlotId: string | null;
+}) {
+  const [aba, setAba] = useState<"meu" | "todos">("meu");
+  const nomesGrupos = Array.from(new Set(grupos.map(g => g.grupo))).sort();
+  const meuGrupo = grupos.find(g => g.slot_id === meuSlotId)?.grupo;
+  const exibir = aba === "meu" && meuGrupo ? [meuGrupo] : nomesGrupos;
+  return (
+    <section className="rounded-xl border border-border bg-card p-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <h2 className="text-[10px] uppercase tracking-widest text-muted-foreground">Classificação</h2>
+        <div className="flex rounded border border-border overflow-hidden text-[9px] uppercase tracking-widest font-bold">
+          {(["meu","todos"] as const).map(a => (
+            <button key={a} onClick={() => setAba(a)}
+              className={cn("px-2 py-0.5", aba === a ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground")}>
+              {a === "meu" ? "Meu grupo" : "Todos"}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="space-y-3">
+        {exibir.map(g => {
+          const doGrupo = grupos.filter(x => x.grupo === g).sort((a, b) => {
+            const ca = classif[a.slot_id] ?? { pontos: 0, gols_pro: 0, gols_contra: 0, jogos: 0 };
+            const cb = classif[b.slot_id] ?? { pontos: 0, gols_pro: 0, gols_contra: 0, jogos: 0 };
+            return (cb.pontos - ca.pontos) || ((cb.gols_pro - cb.gols_contra) - (ca.gols_pro - ca.gols_contra));
+          });
+          return (
+            <div key={g}>
+              <h3 className="text-[9px] uppercase tracking-widest text-muted-foreground mb-1">Grupo {g}</h3>
+              <table className="w-full text-[11px]">
+                <thead className="text-muted-foreground">
+                  <tr><th className="text-left">Time</th><th>P</th><th>SG</th><th>GP</th></tr>
+                </thead>
+                <tbody>
+                  {doGrupo.map(x => {
+                    const c = classif[x.slot_id] ?? { pontos: 0, gols_pro: 0, gols_contra: 0, jogos: 0 };
+                    return (
+                      <tr key={x.slot_id} className={cn(x.slot_id === meuSlotId && "text-primary font-bold")}>
+                        <td className="py-0.5 truncate max-w-[8rem]">
+                          {x.is_cpu ? <Bot className="size-3 inline mr-1" /> : <Crown className="size-3 inline mr-1 text-legendary" />}
+                          {nomeDe(x.slot_id)}
+                        </td>
+                        <td className="text-center tabular-nums">{c.pontos}</td>
+                        <td className="text-center tabular-nums">{c.gols_pro - c.gols_contra}</td>
+                        <td className="text-center tabular-nums">{c.gols_pro}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          );
+        })}
+      </div>
+    </section>
   );
 }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -81,6 +81,11 @@ export function useConquistas() {
   const [stats, setStats] = useState<StatsJogador>(STATS_VAZIAS);
   const [desbloqueadasIds, setDesbloqueadasIds] = useState<Set<string>>(new Set());
   const [carregando, setCarregando] = useState(true);
+  // Refs sempre apontam pro valor mais recente — evita capturar set desatualizado
+  // em closures de partidas em sequência (que causavam o toast da MESMA conquista
+  // aparecer mais de uma vez).
+  const statsRef = useRef<StatsJogador>(STATS_VAZIAS);
+  const desbloqueadasRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if (!user) { setCarregando(false); return; }
@@ -94,7 +99,7 @@ export function useConquistas() {
       if (cancelado) return;
       if (statsRes.data) {
         const d = statsRes.data;
-        setStats({
+        const novo: StatsJogador = {
           partidas_jogadas: d.partidas_jogadas, vitorias: d.vitorias, derrotas: d.derrotas, empates: d.empates,
           gols_marcados: d.gols_marcados, gols_sofridos: d.gols_sofridos, titulos: d.titulos,
           campanhas_completas: d.campanhas_completas,
@@ -108,10 +113,14 @@ export function useConquistas() {
           jogos_sem_sofrer_gol: d.jogos_sem_sofrer_gol,
           formacoes_distintas_usadas: d.formacoes_distintas_usadas ?? [],
           selecoes_distintas_usadas: d.selecoes_distintas_usadas ?? [],
-        });
+        };
+        statsRef.current = novo;
+        setStats(novo);
       }
       if (conquistasRes.data) {
-        setDesbloqueadasIds(new Set(conquistasRes.data.map(c => c.conquista_id)));
+        const ids = new Set(conquistasRes.data.map(c => c.conquista_id));
+        desbloqueadasRef.current = ids;
+        setDesbloqueadasIds(ids);
       }
       setCarregando(false);
     })();
@@ -120,27 +129,30 @@ export function useConquistas() {
 
   const registrarPartida = useCallback(async (ev: ResumoPartidaParaStats): Promise<Conquista[]> => {
     if (!user) return [];
-    const statsAntes = stats;
+    const statsAntes = statsRef.current;
     const statsDepois = mesclarStats(statsAntes, ev);
+    statsRef.current = statsDepois;
     setStats(statsDepois);
 
     const { error } = await supabase.from("stats_jogador").upsert({ user_id: user.id, ...statsDepois });
-    if (error) {
-      // Não bloqueia o jogo se a gravação falhar — apenas não persiste o progresso desta partida.
-      return [];
-    }
+    if (error) return [];
 
-    const novas = novasConquistas(statsDepois, desbloqueadasIds);
+    // Usa o set MAIS atual (ref) — não o snapshot do render.
+    const idsAtuais = desbloqueadasRef.current;
+    const novas = novasConquistas(statsDepois, idsAtuais);
     if (novas.length) {
-      const novoSet = new Set(desbloqueadasIds);
+      const novoSet = new Set(idsAtuais);
       novas.forEach(c => novoSet.add(c.id));
+      desbloqueadasRef.current = novoSet;
       setDesbloqueadasIds(novoSet);
-      await supabase.from("conquistas_desbloqueadas").insert(
+      // upsert com onConflict ignora duplicatas se duas chamadas concorrerem.
+      await supabase.from("conquistas_desbloqueadas").upsert(
         novas.map(c => ({ user_id: user.id, conquista_id: c.id })),
+        { onConflict: "user_id,conquista_id", ignoreDuplicates: true },
       );
     }
     return novas;
-  }, [user, stats, desbloqueadasIds]);
+  }, [user]);
 
   const conquistasComProgresso: ConquistaComProgresso[] = calcularProgresso(stats, desbloqueadasIds);
 

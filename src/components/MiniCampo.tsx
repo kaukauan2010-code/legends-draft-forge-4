@@ -12,6 +12,7 @@ interface Props {
   onSlotClick?: (slotId: string) => void;
   onJogadorClick?: (slotId: string) => void;
   esconderRaridade?: boolean;
+  fill?: boolean; // se true, preenche 100% do contêiner (sem aspect fixo)
 }
 
 const corRaridade: Record<string, string> = {
@@ -22,14 +23,17 @@ const corRaridade: Record<string, string> = {
 };
 const CINZA_NEUTRO = "bg-slate-700/80 border-slate-400";
 
-export function MiniCampo({ formacao, escalacao, slotAtivo, posicaoAlvo, onSlotClick, onJogadorClick, esconderRaridade }: Props) {
+export function MiniCampo({ formacao, escalacao, slotAtivo, posicaoAlvo, onSlotClick, onJogadorClick, esconderRaridade, fill }: Props) {
   const ocupados = new Map(escalacao.map(j => [j.slotId, j]));
   return (
     <div
-      className="relative w-full overflow-hidden rounded-lg border-2 border-white/10 shadow-inner"
+      className={cn(
+        "relative w-full overflow-hidden rounded-lg border-2 border-white/10 shadow-inner",
+        fill && "h-full",
+      )}
       style={{
         background: "linear-gradient(to bottom, var(--color-pitch) 0%, var(--color-pitch-dark) 100%)",
-        aspectRatio: "3/4",
+        ...(fill ? {} : { aspectRatio: "3/4" }),
       }}
     >
       {/* linhas do campo */}

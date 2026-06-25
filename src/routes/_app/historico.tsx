@@ -12,24 +12,24 @@ export const Route = createFileRoute("/_app/historico")({
 });
 
 function Historico() {
-  const { user } = useAuth();
+  const { user, isAnonymous } = useAuth();
   const { data: partidas } = useQuery({
     queryKey: ["historico", user?.id],
-    enabled: !!user,
+    enabled: !!user && !isAnonymous,
     staleTime: 0,
     gcTime: 0,
     queryFn: async () => (await supabase.from("partidas").select("*").eq("user_id", user!.id).order("created_at", { ascending: false })).data ?? [],
   });
 
-  if (!user) {
+  if (!user || isAnonymous) {
     return (
       <div className="mx-auto max-w-md px-4 py-10 space-y-4 text-center">
         <h1 className="font-display text-3xl uppercase italic tracking-tight">Histórico</h1>
         <p className="text-sm text-muted-foreground">
-          O histórico das suas campanhas fica guardado na sua conta. Faça login para vê-lo aqui.
+          O histórico das suas campanhas fica guardado na sua conta. {isAnonymous ? "Visitantes não acumulam histórico — crie uma conta para começar a salvar." : "Faça login para vê-lo aqui."}
         </p>
         <Button asChild className="w-full h-11 font-bold uppercase tracking-widest">
-          <Link to="/auth"><LogIn className="size-4 mr-1.5" /> Fazer login</Link>
+          <Link to="/auth"><LogIn className="size-4 mr-1.5" /> {isAnonymous ? "Criar conta" : "Fazer login"}</Link>
         </Button>
       </div>
     );

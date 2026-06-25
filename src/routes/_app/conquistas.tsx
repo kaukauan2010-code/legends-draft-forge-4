@@ -1,11 +1,13 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import { Button } from "@/components/ui/button";
 import { useConquistas } from "@/lib/useConquistas";
 import { CONQUISTAS, type CategoriaConquista } from "@/lib/conquistas";
 import { cn } from "@/lib/utils";
 import {
   Trophy, Target, Crown, Zap, Crosshair, Star, BookOpen, LayoutGrid,
-  ShieldHalf, Equal, Lock, CheckCircle2,
+  ShieldHalf, Equal, Lock, CheckCircle2, LogIn,
 } from "lucide-react";
 
 export const Route = createFileRoute("/_app/conquistas")({
@@ -35,8 +37,24 @@ const TIER_COR: Record<string, string> = {
 };
 
 function Conquistas() {
+  const { isAnonymous } = useAuth();
   const { conquistas, totalDesbloqueadas, carregando } = useConquistas();
   const [filtro, setFiltro] = useState<CategoriaConquista | "todas">("todas");
+
+  if (isAnonymous) {
+    return (
+      <div className="mx-auto max-w-md px-4 py-10 space-y-4 text-center">
+        <h1 className="font-display text-3xl uppercase italic tracking-tight">Conquistas</h1>
+        <p className="text-sm text-muted-foreground">
+          As conquistas só ficam guardadas em contas reais. Crie uma conta para começar a desbloqueá-las.
+        </p>
+        <Button asChild className="w-full h-11 font-bold uppercase tracking-widest">
+          <Link to="/auth"><LogIn className="size-4 mr-1.5" /> Criar conta</Link>
+        </Button>
+      </div>
+    );
+  }
+
 
   const categorias = useMemo(() => {
     const ids = new Set(CONQUISTAS.map(c => c.categoria));

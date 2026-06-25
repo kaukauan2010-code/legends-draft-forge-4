@@ -18,8 +18,8 @@ import { ChaveamentoVisual } from "@/components/ChaveamentoVisual";
 import { FlagEmoji } from "@/components/FlagEmoji";
 import { toast } from "sonner";
 
-type Velocidade = "normal" | "rapida" | "ultra";
-const DUR_REAL_MS: Record<Velocidade, number> = { normal: 40000, rapida: 20000, ultra: 5000 };
+type Velocidade = "ultra";
+const DUR_REAL_MS: Record<Velocidade, number> = { ultra: 5000 };
 const TEMPO_AUTO_PROXIMA_MS = 3000; // pausa entre partidas no modo automático
 
 export const Route = createFileRoute("/_app/torneio")({
@@ -33,7 +33,8 @@ function Torneio() {
   const { user } = useAuth();
   const qc = useQueryClient();
   const { registrarPartida } = useConquistas();
-  const [velocidade, setVelocidade] = useState<Velocidade>("rapida");
+  // Velocidade FIXA em ultra — sem seletor visual, conforme pedido.
+  const velocidade: Velocidade = "ultra";
   const [partidaAtiva, setPartidaAtiva] = useState<{ minuto: number; eventos: EventoJogo[]; placar: string } | null>(null);
   const [adversarioAtivo, setAdversarioAtivo] = useState<Time | null>(null);
   const [faseAtiva, setFaseAtiva] = useState<string | null>(null);
@@ -78,9 +79,22 @@ function Torneio() {
   const autoTimeoutRef = useRef<ReturnType<typeof setTimeout> | ReturnType<typeof setInterval> | null>(null);
 
 
+  // Aguarda hidratação do zustand-persist antes de decidir redirecionar — sem
+  // isso, ao voltar pra /torneio o estado leva ~1 tick pra carregar e mandamos
+  // o usuário pra /jogar (perdendo a partida em andamento).
   useEffect(() => {
-    if (!s.ativa || !meu) navigate({ to: "/jogar", replace: true });
-  }, [s.ativa, meu, navigate]);
+    const decidir = () => {
+      const st = useCampanha.getState();
+      if (!st.ativa || !st.meuTime()) navigate({ to: "/jogar", replace: true });
+    };
+    if (useCampanha.persist.hasHydrated()) {
+      decidir();
+      return;
+    }
+    const unsub = useCampanha.persist.onFinishHydration(decidir);
+    return () => unsub();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [navigate]);
 
   const salvarPartida = useMutation({
     mutationFn: async () => {
@@ -497,31 +511,27 @@ function Torneio() {
           <p className="text-sm text-muted-foreground mt-1">Confira o chaveamento até a final</p>
         </header>
 
-        <div className="flex gap-4 items-start">
-          <div className="flex-1 space-y-4">
-            <ChaveamentoVisual chave={s.chave} faseAtual={faseChave} />
-            <div className="grid grid-cols-2 gap-2">
-          <Button
-            variant="outline"
-            onClick={() => setEtapaMata("preview")}
-            className="h-12 font-display uppercase tracking-widest font-bold"
-          >
-            Voltar
-          </Button>
-          <Button
-            onClick={() => {
-              s.confirmarChaveamento();
-              setTimeout(() => jogarPartida(), 0);
-            }}
-            className="h-12 font-display uppercase tracking-widest font-black"
-          >
-            <Play className="size-4 mr-1.5" /> Iniciar partida
-          </Button>
-            </div>
+        <div className="flex flex-col gap-4">
+          <ChaveamentoVisual chave={s.chave} faseAtual={faseChave} />
+          <div className="grid grid-cols-2 gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setEtapaMata("preview")}
+              className="h-12 font-display uppercase tracking-widest font-bold"
+            >
+              Voltar
+            </Button>
+            <Button
+              onClick={() => {
+                s.confirmarChaveamento();
+                setTimeout(() => jogarPartida(), 0);
+              }}
+              className="h-12 font-display uppercase tracking-widest font-black"
+            >
+              <Play className="size-4 mr-1.5" /> Iniciar partida
+            </Button>
           </div>
-          <div className="w-52 shrink-0 hidden sm:block">
-            <MinhaSelecaoLateral meu={meu} />
-          </div>
+          <MinhaSelecaoLateral meu={meu} />
         </div>
         <div className="sm:hidden mt-4">
           <MinhaSelecaoLateral meu={meu} />
@@ -930,18 +940,8 @@ function Torneio() {
         </section>
       )}
 
-      {/* Velocidade */}
-      <div className="space-y-2">
-        <div className="text-xs uppercase tracking-widest text-muted-foreground">Velocidade do jogo</div>
-        <div className="grid grid-cols-3 gap-2">
-          {(["normal", "rapida", "ultra"] as Velocidade[]).map(v => (
-            <button key={v} onClick={() => setVelocidade(v)} className={cn(
-              "rounded-lg border py-2 text-[10px] font-bold uppercase tracking-widest",
-              velocidade === v ? "border-primary bg-primary text-primary-foreground" : "border-border bg-secondary text-muted-foreground",
-            )}>{v}</button>
-          ))}
-        </div>
-      </div>
+
+
 
       <div className="grid grid-cols-2 gap-2">
         <Button onClick={jogarPartida} className="h-12 font-display uppercase tracking-widest font-bold">

@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useCampanha } from "@/lib/campanha";
 import { FORMACOES } from "@/lib/formacoes";
 import { MiniCampo } from "@/components/MiniCampo";
@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Dices, Shuffle, Shield, Sword, Star, Trash2, X, Lock, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { statsEscalacao } from "@/lib/simulador";
-import { RARIDADE_CSS, RARIDADE_TEXT_CLASS, RARIDADE_BORDER_CLASS, RARIDADE_LABEL, posicoesCompativeis } from "@/lib/selecoes";
+import { RARIDADE_TEXT_CLASS, RARIDADE_BORDER_CLASS, RARIDADE_LABEL, posicoesCompativeis, SELECOES } from "@/lib/selecoes";
 import { cn } from "@/lib/utils";
 import { FlagEmoji } from "@/components/FlagEmoji";
 
@@ -22,17 +22,41 @@ function Draft() {
   const s = useCampanha();
   const [tempo, setTempo] = useState(30);
   const [slotParaExcluir, setSlotParaExcluir] = useState<string | null>(null);
+  // Animação visual de sorteio: passa 10 bandeiras em 1.5s antes de revelar a seleção real
+  const [sorteando, setSorteando] = useState<string | null>(null);
+  const sortearAnim = () => {
+    if (sorteando || s.selecaoAtual || s.jogadorPendente) return;
+    const pool = SELECOES.slice().sort(() => Math.random() - 0.5);
+    const total = 10;
+    const dur = 1500;
+    let i = 0;
+    setSorteando(pool[0]?.bandeira ?? "🏳️");
+    const tick = setInterval(() => {
+      i++;
+      if (i >= total) {
+        clearInterval(tick);
+        setSorteando(null);
+        s.sortearProxima();
+        return;
+      }
+      setSorteando(pool[i % pool.length]?.bandeira ?? "🏳️");
+    }, dur / total);
+  };
 
   useEffect(() => {
-    if (!s.ativa || !s.config) {
-      navigate({ to: "/jogar", replace: true });
-    }
-  }, [s.ativa, s.config, navigate]);
+    const decidir = () => {
+      const st = useCampanha.getState();
+      if (!st.ativa || !st.config) navigate({ to: "/jogar", replace: true });
+    };
+    if (useCampanha.persist.hasHydrated()) { decidir(); return; }
+    const unsub = useCampanha.persist.onFinishHydration(decidir);
+    return () => unsub();
+  }, [navigate]);
 
-  // reset timer ao mudar contexto
+  // reset timer APENAS quando muda a seleção sorteada
   useEffect(() => {
     setTempo(30);
-  }, [s.selecaoAtual?.id, s.escalacao.length, s.jogadorPendente?.nome]);
+  }, [s.selecaoAtual?.id]);
 
   // cronômetro: só corre quando há algo a decidir
   useEffect(() => {
@@ -46,19 +70,21 @@ function Draft() {
     return () => clearTimeout(t);
   }, [tempo, s.selecaoAtual, s.jogadorPendente]);
 
-  // fim do draft → torneio
+  // fim do draft → torneio. Guard com ref pra não disparar em loop quando o
+  // estado da campanha muda dentro do mesmo render.
+  const jaIniciouTorneio = useRef(false);
   useEffect(() => {
+    if (jaIniciouTorneio.current) return;
     if (s.ativa && s.escalacao.length === 11) {
+      jaIniciouTorneio.current = true;
       s.comecarTorneio();
       navigate({ to: "/torneio" });
     }
-  }, [s.escalacao.length, s.ativa, navigate, s]);
+  }, [s.escalacao.length, s.ativa]);
 
   if (!s.config) return null;
 
   const formacao = FORMACOES[s.config.formacaoId];
-  const esconderForca = s.config.modo === "almanaque";
-  const esconderRaridade = s.config.modo === "almanaque";
   const posicoesLivres = new Set(s.slotsRestantes.map(sl => sl.posicao));
   const pendente = s.jogadorPendente;
   const stats = statsEscalacao(s.escalacao);
@@ -152,10 +178,12 @@ function Draft() {
                 Faltam <span className="font-bold text-foreground">{11 - s.escalacao.length}</span> jogadores.
               </p>
               <Button
-                onClick={() => s.sortearProxima()}
+                onClick={sortearAnim}
+                disabled={!!sorteando}
                 className="h-8 w-full font-display uppercase italic tracking-widest font-black text-[10px]"
               >
-                <Shuffle className="size-3 mr-1.5" /> Sortear seleção
+                <Shuffle className={cn("size-3 mr-1.5", sorteando && "animate-spin")} />
+                {sorteando ? `Sorteando... ${sorteando}` : "Sortear seleção"}
               </Button>
               {s.escalacao.length === 0 && (
                 <Button
@@ -185,8 +213,8 @@ function Draft() {
                   const jaEscalado = s.nomesJaEscolhidos.includes(j.nome);
                   const compativel = !jaEscalado && posicoesCompativeis(j.posicao).some(p => posicoesLivres.has(p));
                   const ehPendente = pendente?.nome === j.nome;
-                  const cor = esconderRaridade ? "border-muted-foreground/40" : RARIDADE_BORDER_CLASS[j.raridade];
-                  const textoCor = esconderRaridade ? "text-muted-foreground" : RARIDADE_TEXT_CLASS[j.raridade];
+                  const cor = false ? "border-muted-foreground/40" : RARIDADE_BORDER_CLASS[j.raridade];
+                  const textoCor = false ? "text-muted-foreground" : RARIDADE_TEXT_CLASS[j.raridade];
                   return (
                     <li key={j.numero + j.nome} className="relative">
                       <button
@@ -209,10 +237,10 @@ function Draft() {
                         <div className="flex-1 min-w-0">
                           <div className="font-bold text-[10px] leading-tight truncate">{j.nome}</div>
                           <div className={cn("text-[8px] font-bold uppercase tracking-widest", textoCor)}>
-                            {j.posicao}{!esconderRaridade && ` · ${RARIDADE_LABEL[j.raridade]}`}
+                            {j.posicao}{!false && ` · ${RARIDADE_LABEL[j.raridade]}`}
                           </div>
                         </div>
-                        {!esconderForca && (
+                        {!false && (
                           <span className="font-display text-sm font-black shrink-0">{j.forca}</span>
                         )}
                       </button>
@@ -250,7 +278,7 @@ function Draft() {
               formacao={formacao}
               escalacao={s.escalacao}
               posicaoAlvo={pendente?.posicao}
-              esconderRaridade={esconderRaridade}
+              esconderRaridade={false}
               onSlotClick={pendente ? (slotId) => {
                 const ok = s.posicionarEm(slotId);
                 if (ok) toast.success(`${pendente.nome} escalado!`);
@@ -276,7 +304,7 @@ function Draft() {
                   className={cn(
                     "flex items-center gap-1.5 rounded border-l-2 px-2 py-1 text-[10px] transition-all",
                     j
-                      ? (esconderRaridade ? "border-muted-foreground/40 bg-secondary/60" : `${RARIDADE_BORDER_CLASS[j.raridade]} bg-secondary/60`) + " cursor-pointer hover:opacity-80"
+                      ? (false ? "border-muted-foreground/40 bg-secondary/60" : `${RARIDADE_BORDER_CLASS[j.raridade]} bg-secondary/60`) + " cursor-pointer hover:opacity-80"
                       : "border-border/40 border-dashed text-muted-foreground",
                   )}
                 >
@@ -285,13 +313,13 @@ function Draft() {
                     <>
                       <div className="flex-1 min-w-0">
                         <div className="font-bold truncate text-[10px] leading-tight">{j.nome}</div>
-                        {!esconderRaridade && (
+                        {!false && (
                           <div className={cn("text-[8px] font-bold uppercase tracking-widest", RARIDADE_TEXT_CLASS[j.raridade])}>
                             {RARIDADE_LABEL[j.raridade]}
                           </div>
                         )}
                       </div>
-                      {!esconderForca && <span className="font-display text-xs font-black shrink-0">{j.forca}</span>}
+                      {!false && <span className="font-display text-xs font-black shrink-0">{j.forca}</span>}
                       <Trash2 className="size-3 text-muted-foreground shrink-0" />
                     </>
                   ) : (

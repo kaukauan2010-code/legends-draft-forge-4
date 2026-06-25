@@ -3,12 +3,11 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
-import { useTheme } from "@/contexts/ThemeContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { LogOut, Upload, Sun, Moon, KeyRound, LogIn } from "lucide-react";
+import { LogOut, Upload, KeyRound, LogIn } from "lucide-react";
 import { AmigosSection } from "@/components/AmigosSection";
 
 export const Route = createFileRoute("/_app/perfil")({
@@ -17,8 +16,7 @@ export const Route = createFileRoute("/_app/perfil")({
 });
 
 function Perfil() {
-  const { user, signOut } = useAuth();
-  const { theme, setTheme } = useTheme();
+  const { user, signOut, isAnonymous } = useAuth();
   const qc = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -39,8 +37,8 @@ function Perfil() {
     if (profile) { setNome(profile.display_name); setAvatar(profile.avatar_url ?? ""); }
   }, [profile]);
 
-  const isEmailAccount = user?.app_metadata?.provider === "email" ||
-    user?.identities?.some(i => i.provider === "email");
+  const isEmailAccount = !isAnonymous && (user?.app_metadata?.provider === "email" ||
+    user?.identities?.some(i => i.provider === "email"));
 
   const salvar = useMutation({
     mutationFn: async () => {
@@ -141,19 +139,21 @@ function Perfil() {
         </Button>
       </form>
 
-      {profile?.player_id && <AmigosSection meuId={user.id} meuPlayerId={profile.player_id} />}
+      {!isAnonymous && profile?.player_id && <AmigosSection meuId={user.id} meuPlayerId={profile.player_id} />}
 
-      <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
-        <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Aparência</div>
-        <div className="grid grid-cols-2 gap-2">
-          <Button variant={theme === "dark" ? "default" : "outline"} onClick={() => setTheme("dark")} className="font-bold">
-            <Moon className="size-4 mr-1.5" /> Escuro
-          </Button>
-          <Button variant={theme === "light" ? "default" : "outline"} onClick={() => setTheme("light")} className="font-bold">
-            <Sun className="size-4 mr-1.5" /> Claro
+      {isAnonymous && (
+        <div className="rounded-2xl border border-primary/30 bg-primary/5 p-4 text-center space-y-2">
+          <div className="text-[10px] uppercase tracking-widest text-primary font-black">Modo Visitante</div>
+          <p className="text-xs text-muted-foreground">
+            Você pode jogar solo e online, mas histórico, conquistas e amigos ficam guardados só em contas reais.
+          </p>
+          <Button asChild className="w-full h-10 font-bold uppercase tracking-widest">
+            <Link to="/auth"><LogIn className="size-4 mr-1.5" /> Criar conta / Entrar</Link>
           </Button>
         </div>
-      </div>
+      )}
+
+
 
       {isEmailAccount && (
         <form onSubmit={e => { e.preventDefault(); trocarSenha.mutate(); }} className="space-y-3 rounded-2xl border border-border bg-card p-4">

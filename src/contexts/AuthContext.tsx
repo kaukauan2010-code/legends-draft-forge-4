@@ -6,10 +6,11 @@ interface AuthCtx {
   user: User | null;
   session: Session | null;
   loading: boolean;
+  isAnonymous: boolean;
   signOut: () => Promise<void>;
 }
 
-const Ctx = createContext<AuthCtx>({ user: null, session: null, loading: true, signOut: async () => {} });
+const Ctx = createContext<AuthCtx>({ user: null, session: null, loading: true, isAnonymous: false, signOut: async () => {} });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
@@ -33,8 +34,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
 
+  const user = session?.user ?? null;
+  const isAnonymous = !!user?.is_anonymous;
+
   return (
-    <Ctx.Provider value={{ user: session?.user ?? null, session, loading, signOut }}>
+    <Ctx.Provider value={{ user, session, loading, isAnonymous, signOut }}>
       {children}
     </Ctx.Provider>
   );

@@ -25,12 +25,12 @@ type Modo = "classico" | "almanaque";
 function gerarCodigo() {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let s = "";
-  for (let i = 0; i < 6; i++) s += chars[Math.floor(Math.random() * chars.length)];
+  for (let i = 0; i < 4; i++) s += chars[Math.floor(Math.random() * chars.length)];
   return s;
 }
 
 function Online() {
-  const { user } = useAuth();
+  const { user, isAnonymous } = useAuth();
   const navigate = useNavigate();
   const [tab, setTab] = useState<"criar" | "entrar">("criar");
   const [comp, setComp] = useState<Competicao>("copa");
@@ -39,20 +39,23 @@ function Online() {
   const [nomeVisitante, setNomeVisitante] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const meuNome = user?.user_metadata?.full_name || user?.email?.split("@")[0] || nomeVisitante || "Visitante";
+  const meuNome =
+    (isAnonymous ? nomeVisitante.trim() : user?.user_metadata?.full_name)
+    || user?.email?.split("@")[0]
+    || nomeVisitante.trim()
+    || "Visitante";
 
   const criar = async () => {
     if (!user) { toast.error("Faça login para criar sala"); return; }
+    if (isAnonymous && !nomeVisitante.trim()) { toast.error("Informe seu nome antes de criar a sala"); return; }
     setBusy(true);
     const competicao = COMPETICOES.find(c => c.id === comp)!;
-    // tenta até 5 vezes em caso de colisão de código
     for (let tentativa = 0; tentativa < 5; tentativa++) {
       const codigo = gerarCodigo();
       const { data, error } = await supabase.from("salas").insert({
         codigo, mestre_id: user.id, modo, competicao: comp, max_jogadores: competicao.vagas,
       }).select("id, codigo").single();
       if (!error && data) {
-        // adiciona o mestre como primeiro jogador
         await supabase.from("sala_jogadores").insert({
           sala_id: data.id, user_id: user.id, nome: meuNome, slot: 1,
         });
@@ -72,19 +75,16 @@ function Online() {
 
   const entrar = async () => {
     const cod = codigoEntrar.trim().toUpperCase();
-    if (cod.length !== 6) { toast.error("Código tem 6 caracteres"); return; }
+    if (cod.length !== 4) { toast.error("Código tem 4 caracteres"); return; }
+    if (!user) { toast.error("Sessão expirada — entre novamente."); return; }
+    if (isAnonymous && !nomeVisitante.trim()) { toast.error("Informe seu nome antes de entrar"); return; }
     setBusy(true);
     const { data: sala } = await supabase.from("salas").select("id, codigo, status, max_jogadores").eq("codigo", cod).maybeSingle();
     if (!sala) { setBusy(false); toast.error("Sala não encontrada"); return; }
     if (sala.status !== "lobby") { setBusy(false); toast.error("Sala já iniciou"); return; }
-    if (!user) {
-      setBusy(false);
-      toast.error("Entre com sua conta para participar de salas online (visitante só pode jogar solo).");
-      return;
-    }
-    // descobre próximo slot livre
     const { data: jogs } = await supabase.from("sala_jogadores").select("slot, user_id").eq("sala_id", sala.id);
     if (jogs?.some(j => j.user_id === user.id)) {
+      setBusy(false);
       navigate({ to: "/online/$codigo", params: { codigo: sala.codigo } });
       return;
     }
@@ -156,6 +156,12 @@ function Online() {
             </p>
           </div>
 
+          {isAnonymous && (
+            <div className="space-y-1.5">
+              <Label htmlFor="nomev1">Seu nome (visitante)</Label>
+              <Input id="nomev1" value={nomeVisitante} onChange={e => setNomeVisitante(e.target.value)} placeholder="Como os outros vão te ver" />
+            </div>
+          )}
           <Button onClick={criar} disabled={busy || !user} className="w-full h-12 font-display uppercase tracking-widest font-black">
             Criar sala
           </Button>
@@ -172,18 +178,14 @@ function Online() {
         <div className="space-y-4">
           <div className="space-y-1.5">
             <Label htmlFor="cod">Código da sala</Label>
-            <Input id="cod" value={codigoEntrar} maxLength={6}
+            <Input id="cod" value={codigoEntrar} maxLength={4}
               onChange={e => setCodigoEntrar(e.target.value.toUpperCase())}
-              placeholder="ABCD12" className="font-mono text-center text-2xl tracking-widest" />
+              placeholder="AB12" className="font-mono text-center text-2xl tracking-widest" />
           </div>
-          {!user && (
+          {isAnonymous && (
             <div className="space-y-1.5">
-              <Label htmlFor="nome">Seu nome</Label>
-              <Input id="nome" value={nomeVisitante} onChange={e => setNomeVisitante(e.target.value)} placeholder="Visitante" />
-              <p className="text-[10px] text-destructive space-x-1">
-                <span>Visitantes ainda não podem entrar em salas —</span>
-                <Link to="/auth" className="underline font-bold">faça login</Link>
-              </p>
+              <Label htmlFor="nomev2">Seu nome (visitante)</Label>
+              <Input id="nomev2" value={nomeVisitante} onChange={e => setNomeVisitante(e.target.value)} placeholder="Como os outros vão te ver" />
             </div>
           )}
           <Button onClick={entrar} disabled={busy} className="w-full h-12 font-display uppercase tracking-widest font-black">
