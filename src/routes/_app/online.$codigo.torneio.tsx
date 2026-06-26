@@ -597,7 +597,7 @@ function TorneioOnline() {
 
       {/* Classificação dos grupos: meu grupo + todos */}
       {faseAtual === "grupos" && grupos.length > 0 && (
-        <ClassificacaoTabs grupos={grupos} classif={classif} nomeDe={nomeDe} meuSlotId={meuSlot?.id ?? null} />
+        <ClassificacaoTabs grupos={grupos} classif={classif} nomeDe={nomeDe} bandeiraDe={bandeiraDe} meuSlotId={meuSlot?.id ?? null} />
       )}
 
       {/* Bracket de mata-mata */}
@@ -780,9 +780,11 @@ function AguardandoCard({
 // ──────────────────────────────────────────────────────────────
 // Classificação geral: tabs "Meu grupo" / "Todos os grupos"
 // ──────────────────────────────────────────────────────────────
-function ClassificacaoTabs({ grupos, classif, nomeDe, meuSlotId }: {
+function ClassificacaoTabs({ grupos, classif, nomeDe, bandeiraDe, meuSlotId }: {
   grupos: SlotGrupo[]; classif: Record<string, ClassifLinha>;
-  nomeDe: (id: string | null) => string; meuSlotId: string | null;
+  nomeDe: (id: string | null) => string;
+  bandeiraDe: (id: string | null) => string;
+  meuSlotId: string | null;
 }) {
   const [aba, setAba] = useState<"meu" | "todos">("meu");
   const nomesGrupos = Array.from(new Set(grupos.map(g => g.grupo))).sort();
