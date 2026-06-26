@@ -821,7 +821,9 @@ function ClassificacaoTabs({ grupos, classif, nomeDe, meuSlotId }: {
                     return (
                       <tr key={x.slot_id} className={cn(x.slot_id === meuSlotId && "text-primary font-bold")}>
                         <td className="py-0.5 truncate max-w-[8rem]">
-                          {x.is_cpu ? <Bot className="size-3 inline mr-1" /> : <Crown className="size-3 inline mr-1 text-legendary" />}
+                          {x.is_cpu
+                            ? <Bot className="size-3 inline mr-1 text-muted-foreground" />
+                            : <span className="mr-1 leading-none">{bandeiraDe(x.slot_id)}</span>}
                           {nomeDe(x.slot_id)}
                         </td>
                         <td className="text-center tabular-nums">{c.pontos}</td>
