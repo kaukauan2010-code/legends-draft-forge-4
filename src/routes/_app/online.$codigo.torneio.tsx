@@ -45,6 +45,7 @@ interface Sala { id: string; codigo: string; mestre_id: string; velocidade: "nor
 interface SlotJogador {
   id: string; sala_id: string; user_id: string | null; nome: string; is_cpu: boolean;
   grupo: string | null; elenco_online: JogadorEscalado[] | null; last_seen_at: string;
+  bandeira: string | null;
 }
 interface SlotGrupo { slot_id: string; user_id: string | null; nome: string; is_cpu: boolean; grupo: string; }
 interface ConfrontoOnline {
@@ -174,6 +175,7 @@ function TorneioOnline() {
   const meuSlot = useMemo(() => slots.find(s => s.user_id === user?.id) ?? null, [slots, user?.id]);
   const slotPorId = useMemo(() => new Map(slots.map(s => [s.id, s])), [slots]);
   const nomeDe = (slotId: string | null) => (slotId ? slotPorId.get(slotId)?.nome ?? "—" : "—");
+  const bandeiraDe = (slotId: string | null) => (slotId ? slotPorId.get(slotId)?.bandeira ?? "🏳️" : "🏳️");
   const estaOffline = (slotId: string | null) => {
     const s = slotId ? slotPorId.get(slotId) : null;
     if (!s || s.is_cpu || !s.user_id) return false;
